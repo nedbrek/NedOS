@@ -1,0 +1,304 @@
+minimize ring zero content
+multiple terminals, multiple processors, multiple machines
+TCP/IP as a base, fast local sockets
+1 task switcher per processor
+
+(only IDTR set in real mode, probably to 0)
+data structures to set before switching to protected mode
+IDTR-IDT, GDTR-GDT, TSS, (LDT), 1 PDE, 1 PTE, code to jump to, MTRR,CR1-CR4
+load CR0 to switch
+
+IOPL must be 0, cannot allow any non kernel task to CLI
+interrupt handlers can be conforming (ring 3) or ring 0
+error code not pushed on INT ib or INTR#
+
+all use Jcc, SETcc,LOOPcc,CMOVcc
+cc -CMOV
+--unsigned--
+A,NBE		above,not below or equal		CF | ZF == 0
+BE,NA		below or equal,not above		CF | ZF == 1
+AE,NB,NC	above or equal,not below,not carry	CF == 0
+B,NAE,C		below,not above or equal,carry		CF == 1
+E,Z		equal,zero				ZF == 1
+NE,NZ		not equal,not zero			ZF == 0
+P,PE		parity,parity even			PF == 1
+NP,PO		not parity,parity odd			PF == 0
+--signed--
+GE,NL		greater or equal,not less		SF ^ OF == 0
+NGE,L		not greater or equal,less		SF ^ OF == 1
+LE,NG		less or equal,not greater		(SF ^ OF) | ZF == 1
+O		overflow				OF == 1
+NO		not overflow				OF == 0
+S		negative sign				SF == 1
+NS		nonnegative sign			SF == 0
+
+Jcc -add
+CXZ		CX  == 0
+ECXZ		ECX == 0
+
+CMPXCHG DST,EAX,SRC
+	if( DST == EAX )
+		DST = SRC
+	else
+		EAX = DST
+	flags set according to origEAX - DST
+	--or--
+	SUB    EAX,DST
+	CMOVZ  DST,SRC
+	MOV    EAX,DST
+
+CR0
+	0	real/protected mode
+	1	trap WAIT,FWAIT
+	2	trap FPU
+	3	task switch
+	4	1
+	5	external FPU
+	16	write protect
+	18	alignment check
+	29	write through disable
+	30	cache disable
+	31	paging
+
+80010011
+
+CR4
+	0	VME, virtual 86 interrupt extension enable
+	1	PVI, protected mode interrupt extension enable
+	2	TSD, time stamp disable (require ring 0 on 1 for RDTSC)
+	3	DE, DR4/DR5 cause UD when set
+	4	PSE, page size extension, 2MB/4MB
+	5	PAE, physical address extension, 36 bit
+	6	MCE, machine check extension
+	7	PGE, page global enable
+	8	PCE, allow ring 3 on 1 to RDPMC
+
+01F0
+
+EFLAGS
+	CF - carry flag, indicates overflow/underflow - unsigned
+		use STC,CLC,CMC
+	rsvd
+	PF - parity flag, odd parity on LSB of result
+	rsvd
+	AF - aux carry flag, BCD
+	ZF - zero flag, set if zero
+	SF - sign flag, MSb of result
+	TF - trap flag, single stepping (TRAP on every instruction)
+	IF - interrupt enable flag
+		use CLI,STI
+		POPF and IRET only modify if IOPL allows
+	DF - direction flag
+		use CLD,STD
+	OF - overflow flag, signed
+	IOPL- I/O privilege level (2 bits)
+		covers IN,INS,OUT,OUTS,CLI,STI
+		POPF and IRET only modify if ring 0
+	NT - nested task
+	RF - resume flag
+	VM - virtual 8086 mode
+	AC - alignment check
+	VIF - virtual interrupt flag
+	VIP - virtual interrupt pending
+	ID - ID flag, indicates support of CPUID
+
+task execution
+	CALL to a new task code segment
+	JMP to a new task code segment
+	interrupt,exception
+
+CR3 - page directory address
+
+processor types
+IOmap - 1 bit for each IO address (8KB for all), 255 at end of map, GPF on 1
+	size also limited by TSS segment size
+
+task - basic unit of execution
+	// 104 bytes
+	0-1	task back pointer
+	4-7	ESP0
+	8-9	SS0
+	12-15	ESP1
+	16-17	SS1
+	20-23	ESP2
+	24-25	SS2
+	28-31	CR3
+	32-35	EIP
+	36-39	EFLAGS
+	40-43	EAX
+	44-47	ECX
+	48-51	EDX
+	52-55	EBX
+	56-59	ESP
+	60-63	EBP
+	64-67	ESI
+	68-71	EDI
+	72-73	ES
+	76-77	CS
+	80-81	SS
+	84-85	DS
+	88-89	FS
+	92-93	GS
+	96-97	LDT
+	100:0	T (debug trap, exception on task switch)
+	103-104	I/O map base address (offset from base of TSS, < E000)
+
+
+	// dynamic (modified as task runs)
+	GP registers
+	EFLAGS, EIP
+	CS,DS,ES,FS,GS,SS for ring 3
+	back pointer to previous task
+
+	// static (modified by OS)
+	CR3, task register (TR), LDTR, IO map base address, IO map
+	SS:ESP for rings 0,1,2
+
+TSS descriptor, can only live in GDT, TYPE 5/7 (not busy, busy)
+	0-1	limit[15:0], size of TSS >= 0x67
+	2-3	base[15:0]
+	4	base[23:16]
+	5:0-4	type[4:0]
+	5:5-6	DPL (descriptor privilege level, level needed to switch into)
+	5:7	P (present)
+	6:0-3	limit[19:16]
+	6:4	AVL (OS defined bit)
+	6:6	B default bit size 16/32
+	6:7	G (granularity, 0=1 MB segments, 1=4GB segments)
+	7	base[31:24]
+	loaded into TR to execute, via LTR (saved via STR) - ring 0 only
+
+	0-4+6,7 available when not present (56 bits)
+
+Task Gate descriptor, GDT,LDT,IDT, TYPE 3
+	2-3	TSS
+	5	as above (minus busy)
+	needed to reference tasks in the IDT
+
+4 3 2 1 0
+-system
+0 0 0 0 0 rsvd
+0 0 0 0 1 16 bit TSS, not busy
+0 0 0 1 0 LDT
+0 0 0 1 1 16 bit TSS, busy
+0 0 1 0 0 16 bit Call Gate
+0 0 1 0 1 Task Gate
+0 0 1 1 0 16 bit INT Gate
+0 0 1 1 1 16 bit Trap Gate
+0 1 0 0 0 rsvd
+0 1 0 0 1 TSS, not busy (auto task switch)
+0 1 0 1 0 rsvd
+0 1 0 1 1 TSS, busy
+0 1 1 0 0 Call Gate (change privelege, do not save flags)
+0 1 1 0 1 rsvd
+0 1 1 1 0 INT Gate (prevents interrupt nesting, free CLI/STI)
+0 1 1 1 1 Trap Gate (does not prevent interrupt nesting)
+-user
+1 0 0 0 0 Data, no write, not accessed, expand up
+1 0 0 0 1 Data, no write, accessed, expand up
+1 0 0 1 0 Data, write, not accessed, expand up
+1 0 0 1 1 Data, write, accessed, expand up
+1 0 1 0 0 Data, no write, not accessed, expand down
+1 0 1 0 1 Data, no write, accessed, expand down
+1 0 1 1 0 Data, write, not accessed, expand down
+1 0 1 1 1 Data, write, accessed, expand down
+1 1 0 0 0 Code, no read, not accessed, non conforming (GPF if not priv)
+1 1 0 0 1 Code, no read, accessed, non conforming
+1 1 0 1 0 Code, read, not accessed, non conforming
+1 1 0 1 1 Code, read, accessed, non conforming
+1 1 1 0 0 Code, no read, not accessed, conforming (continue at current priv level)
+1 1 1 0 1 Code, no read, accessed, conforming
+1 1 1 1 0 Code, read, not accessed, conforming
+1 1 1 1 1 Code, read, accessed, conforming
+
+GDTR holds linear address of base
+LDTR holds linear address of base
+
+call user code
+CALL CS=code segment, RET
+
+call ring 0 code
+CALL CS=call gate, RET
+
+error handler
+IDT[int]=trap gate, IRET
+
+interrupt hander (free CLI,STI)
+IDT[int]=interrupt gate, IRET
+
+switch tasks (state save/restore)
+CALL CS=TSS, RET
+
+Page Directory Entry (bits) 4K
+	0	Present
+	1	read/write
+	2	user/supervisor
+	3	write through
+	4	uncacheable
+	5	accessed
+	6	0 (rsvd)
+	7	size (4K, 4M:2M) 0 for 4K
+	8	global (n/a)
+	9-11	OS defined
+	12-31	page table address
+	4M
+	0	Present
+	1	read/write
+	2	user/supervisor
+	3	write through
+	4	uncacheable
+	5	accessed
+	6	dirty
+	7	size (4K, 4M:2M) 1 for 4M
+	8	global
+	9-11	OS defined
+	12-21	rsvd
+	22-31	page base address
+
+Page Table Entry
+	0	Present
+	1	read/write
+	2	user/supervisor
+	3	write through
+	4	uncacheable
+	5	accessed
+	6	dirty
+	7	0 (rsvd)
+	8	global
+	9-11	OS defined
+	12-31	page base address
+
+if not present, 1:31 are available for os
+
+32 bit, 1 page directory table
+1024 PDE (points to 4MB page or 1024 PTEs)
+CR3 has 20 bit base address of PDT
+
+36 bit
+add Page Directory Pointer Table, 4 page directories
+512 PDE (points to 2MB page or 512 PTEs)
+CR3 has 27 bit base address of PDPT
+0:11 page offset
+12:20 PTE offset, or additional page offset in 2MB mode
+21:29 PDE offset
+30:31 PDP offset
+
+
+64 GB address space (with 36 PAE), 8K LDT entries
+8 MB
+
+
+DOS entry
+0-1023            interrupt table
+1024-CS*16:255    DOS goop
+CS:256-CS:FFFFh   OS DOS process
+
+OS memmap
+0-4GB-1           OS space
+4GB-TOM           user space
+
+32 bit address space, 48 MB
+1 PDE - 4MB OS space
+11 PDE - 44 MB user space
+11 PT - 4K each, 44K total
+CR3 = &PDT.PDE[0]
