@@ -60,8 +60,8 @@
 	;bits 32 - we set our code segment to 16bit!
 codePE:
 	; load the ds seg desc
-	push  16
-	pop   ds
+	mov   ax, 16
+	mov   ds, ax
 
 	; set long mode
 	mov   ecx, 0xC000_0080
