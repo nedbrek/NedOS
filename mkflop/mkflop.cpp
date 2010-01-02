@@ -2,13 +2,18 @@
 
 int main(int argc, char **argv)
 {
+	if( argc < 2 )
+	{
+		printf("Usage: %s <bootloader>\n", argv[0]);
+		return -1;
+	}
+
 	FILE *ofile = fopen("test.img", "wb");
 
 	BiosParamBlock bpb;
-	bpb.bootCode_[0] = 0x87; // xchg
-	bpb.bootCode_[1] = 0xdb; // bx,bx
-	bpb.bootCode_[2] = 0xeb; // jmp imm b
-	bpb.bootCode_[3] = 0xfe; // -2 (self)
+
+	FILE *ifile = fopen(argv[1], "rb");
+	fread(bpb.bootCode_, sizeof(bpb.bootCode_), 1, ifile);
 
 	bpb.write(ofile);
 
