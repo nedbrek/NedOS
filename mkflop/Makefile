@@ -1,4 +1,4 @@
-.PHONY: all clean run
+.PHONY: all clean run_test run_boot
 CPPFLAGS = -Wall
 
 all: mkflop.exe test
@@ -14,13 +14,19 @@ mkflop.exe: fat.o mkflop.o
 test: test.asm
 	@nasm -Ox test.asm
 
+boot: boot.asm
+	@nasm -Ox boot.asm
+
 clean:
 	@rm -f *.o mkflop.exe test test.img
 
 Depend.Make: *.cpp
 	@g++ -MM $^ > Depend.Make
 
-run: all
+run_test: test mkflop.exe
 	@./mkflop.exe test
 	diff test.img test.img.gold
+
+run_boot: boot mkflop.exe
+	@./mkflop.exe boot
 
