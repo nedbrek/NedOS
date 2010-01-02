@@ -1,4 +1,4 @@
-.PHONY: all clean
+.PHONY: all clean run
 CPPFLAGS = -Wall
 
 all: mkflop.exe test
@@ -15,8 +15,12 @@ test: test.asm
 	@nasm -Ox test.asm
 
 clean:
-	@rm -f *.o mkflop.exe test
+	@rm -f *.o mkflop.exe test test.img
 
 Depend.Make: *.cpp
 	@g++ -MM $^ > Depend.Make
+
+run: all
+	@./mkflop.exe test
+	diff test.img test.img.gold
 
