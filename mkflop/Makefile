@@ -1,7 +1,7 @@
 .PHONY: all clean
 CPPFLAGS = -Wall
 
-all: mkflop.exe
+all: mkflop.exe test
 
 -include Depend.Make
 
@@ -10,6 +10,9 @@ all: mkflop.exe
 
 mkflop.exe: fat.o mkflop.o
 	@g++ -o$@ -Wall $^
+
+test: test.asm
+	@nasm -Ox test.asm
 
 clean:
 	@rm -f *.o mkflop.exe
