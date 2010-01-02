@@ -15,7 +15,7 @@ test: test.asm
 	@nasm -Ox test.asm
 
 clean:
-	@rm -f *.o mkflop.exe
+	@rm -f *.o mkflop.exe test
 
 Depend.Make: *.cpp
 	@g++ -MM $^ > Depend.Make
