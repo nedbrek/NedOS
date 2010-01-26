@@ -14,6 +14,6 @@ cddump.exe: eltorito.o iso9660.o cddump.o
 clean:
 	@rm -f *.o cddump.exe
 
-Depend.Make: *.cpp
+Depend.Make: *.cpp *.h
 	@g++ -MM $^ > Depend.Make
 
