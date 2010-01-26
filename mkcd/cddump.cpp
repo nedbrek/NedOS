@@ -34,6 +34,17 @@ int main(int argc, char **argv)
 		if( pvd->type_ == 255 ) break; // terminator
 	}
 
+	printf("Size of BootCatalog=%d\n", sizeof(BootCatalog));
+	if( fseek(f, bootCatalog * 2048, SEEK_SET) )
+	{
+		printf("Error finding boot catalog\n");
+		return 1;
+	}
+	fread(buf, 2048, 1, f);
+
+	BootCatalog *bcp = (BootCatalog*)buf;
+	bcp->print();
+
 	return 0;
 }
 
