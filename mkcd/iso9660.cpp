@@ -24,27 +24,17 @@ bool isPrintable(uint8_t c)
 void printC(uint8_t c)
 {
 	if( isPrintable(c) )
-		printf("%2c ", c);
+		printf("\\%2c ", c);
 	else
-		printf("%02x ", c);
+		printf(" %02x ", c);
 }
 
 void printStr(uint8_t *cary, unsigned len)
 {
-	if( len < 78 )
-	{
-		printf("'");
-		for(unsigned i = 0; i < len; ++i)
-			printC(cary[i]);
-		printf("'\n");
-		return;
-	}
-	//else
-
 	for(unsigned i = 0; i < len; ++i)
 	{
 		printC(cary[i]);
-		if( len == 16 ) printf("\n");
+		if( i % 16 == 15 ) printf("\n");
 	}
 	printf("\n");
 }
