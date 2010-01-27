@@ -45,6 +45,22 @@ int main(int argc, char **argv)
 	BootCatalog *bcp = (BootCatalog*)buf;
 	bcp->print();
 
+	uint32_t bootImageLBA = bcp->getBootImageLBA();
+	if( bootImageLBA == 0 ||
+	    fseek(f, bootImageLBA * 2048, SEEK_SET) )
+	{
+		printf("Error finding boot image\n");
+		return 1;
+	}
+	fread(buf, 2048, 1, f);
+
+	for(unsigned i = 0; i < 176; ++i)
+	{
+		printf("%02x ", buf[i]);
+		if( i % 16 == 15 ) printf("\n");
+	}
+	printf("\n");
+
 	return 0;
 }
 

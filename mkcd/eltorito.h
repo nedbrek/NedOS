@@ -42,7 +42,30 @@ struct ValidationEntry // IsA BCEntry
 
 	ValidationEntry(void);
 
+	void init(void);
+
 	bool isValid(void) const;
+
+	void print(void);
+
+} __attribute__((packed));
+// g++ requires two parens for some bizarre reason
+
+struct BCInit // IsA BCEntry
+{
+	uint8_t  bootable_;
+	uint8_t  mediaType_;
+	uint16_t startSeg_;
+	uint8_t  systemType_;
+	uint8_t  unused0_;
+	uint16_t numSec_; // 512B sectors
+	uint32_t imageLoc_; // LBA
+	uint8_t  unused1_[20];
+
+public: // methods
+	BCInit(void);
+
+	void init(void);
 
 	void print(void);
 
@@ -56,6 +79,8 @@ struct BootCatalog
 	BootCatalog(void);
 
 	void print(void);
+
+	uint32_t getBootImageLBA(void) const;
 };
 
 #endif

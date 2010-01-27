@@ -64,26 +64,34 @@ void BiEnd16::set(uint16_t val)
 //----------------------------------------------------------------------------
 DirEnt::DirEnt(void)
 {
-	memset(weird_, 0, 34);
+	  len_ = 34;
+	exLen_ =  0;
+
+	extLba_.set(0);
+	extSz_ .set(0);
+
+	memset(date_, 0, 7);
+
+	flags_ = 2; // root directory
+	interleaveSz_ = 0;
+	seqNum_.set(0);
+	fnameLen_ = 1;
+	len1_ = 1;
+	pad_ = 0;
 }
 
 void DirEnt::print(void)
 {
-	printf("DirEnt in C\n");
-	for(unsigned i = 0; i < 34; ++i)
-	{
-		printC(weird_[i]);
-		if( i == 16 ) printf("\n");
-	}
-	printf("\n");
-
-	printf("DirEnt in 0x\n");
-	for(unsigned i = 0; i < 34; ++i)
-	{
-		printf("%02x ", weird_[i]);
-		if( i == 16 ) printf("\n");
-	}
-	printf("\n");
+	printf("  Len=%d\n", len_);
+	printf("ExLen=%d\n", exLen_);
+	printf("extLBA=%d\n", extLba_.little_);
+	printf("extSz =%d\n", extSz_.little_);
+	printf("Date:\n");
+	printStr(date_, 7);
+	printf("Flags=%d\n", flags_);
+	printf("Interleave=%d\n", interleaveSz_);
+	printf("SeqNum=%d\n", seqNum_.little_);
+	printf("Filename len=%d (%d)(%d)\n", fnameLen_, len1_, pad_);
 }
 
 //----------------------------------------------------------------------------
@@ -156,6 +164,7 @@ void PrimaryVolDesc::print(void)
 	printf("PathTblL: %d\n", pathTableLoc_);
 	printf("AltPTL  : %d\n", altPTLoc_);
 
+	printf("Size of dir ent=%d\n", sizeof(rootDE_));
 	rootDE_.print();
 
 	printStr(volSetId_, 128);

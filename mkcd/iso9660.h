@@ -36,7 +36,17 @@ struct BiEnd16
 // 34 bytes
 struct DirEnt
 {
-	uint8_t weird_[34];
+	uint8_t len_;
+	uint8_t exLen_;
+	BiEnd32 extLba_;
+	BiEnd32 extSz_;
+	uint8_t date_[7];
+	uint8_t flags_;
+	uint8_t interleaveSz_;
+	BiEnd16 seqNum_;
+	uint8_t fnameLen_;
+	uint8_t len1_;
+	uint8_t pad_;
 
 public: // methods
 	DirEnt(void);
