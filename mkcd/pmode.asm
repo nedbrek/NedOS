@@ -11,8 +11,8 @@ PAGE_LEN       equ   0x01000
 	;mov   ax, 0xdead ; testing mem range
 	xor   di, di
 
-	; GDT (64KB at 0x10000)
-	push  0x1000
+	; GDT/IDT (64KB at GDT_BASE)
+	push  (GDT_BASE >> 4)
 	pop   es
 	mov   cx, 0x8000
 	rep stosw
