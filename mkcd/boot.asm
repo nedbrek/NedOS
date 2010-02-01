@@ -14,9 +14,13 @@
 ; A0000..FFFFF ROM
 
 ; constants
-GDT_BASE    	equ	0x10000
-PAGE_BASE   	equ	0x20000
-MMAP_BASE   	equ	0x30000
+BOOT_PARMS  	equ	0x10000 ; information from boot time
+GDT_BASE    	equ	0x20000
+PAGE_BASE   	equ	0x30000
+MMAP_BASE   	equ	0x40000
+
+BIOS_GET_MMAP	equ   0xe820
+BIOS_SET_A20M	equ	0x2401
 
 ; section start
 	org 0x7c00
@@ -28,8 +32,17 @@ MMAP_BASE   	equ	0x30000
 	mov ss, ax
 	mov sp, 0xffff
 
-	; get mem map
 	xor   di,  di
+
+	; save boot disk id
+	push (BOOT_PARMS >> 4)
+	pop  es
+	mov  cx, 0x8000
+	rep  stosw
+
+	mov [ES:1024], dx
+
+	; get mem map
 	push (MMAP_BASE >> 4)
 	pop  es
 	mov  cx, 0x8000
@@ -41,7 +54,7 @@ MMAP_BASE   	equ	0x30000
 	mov ecx, 24  ; ACPI 3
 
 	; first call is CF==error
-	mov  ax, 0xe820
+	mov  ax, BIOS_GET_MMAP
 	mov edx, 'PAMS' ; 'SMAP' little endian
 	mov BYTE [es:di+20], 1 ; set ACPI 3 valid
 
@@ -63,7 +76,7 @@ MMAP_BASE   	equ	0x30000
 	; later calls are CF==done
 nextMap:
 	xor  eax, eax
-	mov   ax, 0xe820
+	mov   ax, BIOS_GET_MMAP
 	mov  ecx, 24
 	mov  edx, 'PAMS'
 	mov  BYTE [es:di+20], 1 ; set ACPI 3 valid
@@ -101,7 +114,7 @@ doneMap:
 	; set VGA mode
 
 	; set A20
-	mov  ax, 0x2401
+	mov  ax, BIOS_SET_A20M
 	int  0x15
 
 	; jump into pmode
