@@ -81,7 +81,7 @@ codePE:
 	wrmsr
 
 	; set L bit in code segment
-	mov   eax, 0x1000e
+	mov   eax, GDT_BASE+0xe
 	bts   word [eax], 5
 
 	; turn on paging
@@ -101,5 +101,5 @@ loop:
 
 gdt:
 	dw 32
-	dd 0x10000
+	dd GDT_BASE
 
