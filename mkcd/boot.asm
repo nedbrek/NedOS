@@ -28,21 +28,13 @@ BIOS_SET_A20M	equ	0x2401
 
 	bits 16
 
+	; clear boot output block (BOB)
+	push (BOOT_PARMS >> 4)
+	call fun_kzero
+
 	; set up the stack (needed for BIOS calls)
-	xor eax, eax
 	mov ss, ax
 	mov sp, 0x7c00
-
-	xor   di,  di
-
-	; save boot disk id
-	push (BOOT_PARMS >> 4)
-	pop  es
-	mov  cx, 0x8000
-	rep  stosw
-
-	xor ebx, ebx
-	mov [es:bx], dx
 
 	; set VGA mode
 
@@ -71,30 +63,30 @@ top_vbe:
 	cmp ax, 0x004f
 	jne error
 
-	;; space saver, ds=es (needs to be restored)
+	;;; space saver, ds=es (needs to be restored)
 	push ds
 	push es
 	pop  ds
 
 	;; check the attributes for hw sup, color, graphics, lfb
 	mov ax, [di]
-	and ax, 0x99
-	cmp ax, 0x99
+	and al, 0x99
+	cmp al, 0x99
 	jne next_vbe
 
 	;; examine x,y,bpp,mm to see if we want it
-	mov ax, [di+27] ; get mem mode
+	mov al, [di+27] ; get mem mode
 	and al, 0xfd ; check 4 and 6 (non-banked)
 	cmp al, 4
 	jne next_vbe
 
-	movzx ax, [di+25] ; get bpp
-	cmp   BYTE [12], 32
-	jne   vbe_not_32bpp
+	mov al, [di+25] ; get bpp
+	cmp BYTE [12], 32
+	jne vbe_not_32bpp
 
 	;;; if we already have 32 bpp
 	;;; only want higher x in 32 bpp
-	cmp ax, 32
+	cmp al, 32
 	jne next_vbe
 
 vbe_check_width:
@@ -111,55 +103,86 @@ vbe_check_width:
 
 vbe_not_32bpp:
 	;;; current mode is not 32bpp (ax is new bpp)
-	cmp ax, [12]
+	cmp al, [12]
 	jb  next_vbe        ; less, skip
 	ja  save_vbe        ; more, take it
 	jmp vbe_check_width ; equal, check width
 
 save_vbe:
-	mov   ax, [di+18] ; get width
-	mov   [4], ax
-	mov   ax, [di+20] ; get height
-	mov   [8], ax
-	movzx ax, [di+25] ; get bpp
-	mov   [12], ax
-	mov   ax, [di+40] ; get lfb
-	mov   [16], ax
-	mov   ax, [di+42] ; get lfb
-	mov   [18], ax
-	movzx ax, [di] ; get caps
-	mov   [20], ax
-	mov   [24], cx
+	mov ax, [di+18] ; get width
+	mov [4], ax
+	mov ax, [di+20] ; get height
+	mov [8], ax
+	mov al, [di+25] ; get bpp
+	mov [12], al
+	mov ax, [di+40] ; get lfb
+	mov [16], ax
+	mov ax, [di+42] ; get lfb
+	mov [18], ax
+	mov al, [di]    ; get caps
+	mov [20], al
+	mov [24], cx    ; store mode
 
 next_vbe:
 	pop ds
-	add si, 2
+	;add si, 2
+	inc si ; space saver
+	inc si
 	jmp top_vbe
 
-done_vbe:
+error:
+	xchg bx,bx
+	jmp error
 
-	; get mem map (assumes ebx is 0)
-	xor  di, di
-	push (MMAP_BASE >> 4)
-	pop  es
-	xor  ax, ax
-	mov  cx, 0x8000
-	rep  stosw
+fun_kzero:
+	; IN seg on stack
+	pop es
+	xor ax, ax
+	;mov   ax, 0xdead ; testing mem range
+	mov cx, 0x8000
+	rep stosw
+	ret
 
-	mov ecx, 24  ; ACPI 3
-
-	;; first call is CF==error
+fun_getMMap:
+	; IN ebp = SMAP, ds:di = MMAP block
+	xor  eax, eax
 	mov  ax, BIOS_GET_MMAP
-	;xor ebx, ebx
-	mov edx, 'PAMS' ; 'SMAP' little endian
-	mov BYTE [es:di+20], 1 ; set ACPI 3 valid
+	mov ecx, 24  ; ACPI 3
+	mov edx, ebp ; 'SMAP'
+	mov BYTE [di+20], 1 ; set ACPI 3 valid
 
 	int 0x15
+	ret
+
+done_vbe:
+	;; space saver
+	push es
+	pop  ds
+
+	;; set the chosen mode
+	mov bx, [24]
+	or  bh, 0x40
+	mov ax, 0x4f02
+	int 0x10
+
+	xor  di, di
+	; save boot disk id
+	mov [di], dx
+
+	; get mem map
+	push (MMAP_BASE >> 4)
+	call fun_kzero
+
+	mov ebp, 'PAMS' ; 'SMAP' little endian
+
+	;; first call is CF==error
+	xor ebx, ebx
+
+	call fun_getMMap
 
 	jc  error
 
-	mov edx, 'PAMS'
-	cmp eax, edx ; success will copy edx to eax
+	cmp eax, ebp ; success will copy old edx to eax (edx is trash)
 	jne error
 
 	test ebx, ebx ; ebx == 0 is done
@@ -171,12 +194,7 @@ done_vbe:
 
 	; later calls are CF==done
 nextMap:
-	xor  eax, eax
-	mov   ax, BIOS_GET_MMAP
-	mov  ecx, 24
-	mov  edx, 'PAMS'
-	mov  BYTE [es:di+20], 1 ; set ACPI 3 valid
-	int 0x15
+	call fun_getMMap
 	jc   doneMap
 	test ebx, ebx ; ebx == 0 is done too
 	je   doneMap
@@ -184,14 +202,14 @@ nextMap:
 	jcxz nextMap ; skip zero len entries
 
 	; check for extended entry valid
-	test BYTE [es:di+20], 1
+	test BYTE [di+20], 1
 	jz   nextMap
 
 	; test for len==0 (qword from di+8..15)
-	mov  eax, [es:di+8]
-	test eax, eax
+	xor  esi, esi
+	test [di+8], esi
 	jnz  incMap
-	mov  eax, [es:di+12]
+	test [di+12], esi
 	jz   nextMap
 
 	; advance to next
@@ -201,10 +219,6 @@ incMap:
 	je  error ; ran out of buffer space (2730 entries!)
 
 	jmp nextMap
-
-error:
-	xchg bx,bx
-	jmp error
 
 doneMap:
 
