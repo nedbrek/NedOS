@@ -43,8 +43,6 @@ BIOS_SET_A20M	equ	0x2401
 	mov DWORD [es:di], '2EBV' ; VBE2 little endian
 	mov ax, 0x4f00
 	int 0x10
-	cmp ax, 0x004f
-	jne error
 
 	;; search the mode blocks for one we like
 	lds si, [es:di+14] ; load list seg:off into ds:si
@@ -60,8 +58,6 @@ top_vbe:
 
 	mov ax, 0x4f01
 	int 0x10
-	cmp ax, 0x004f
-	jne error
 
 	;;; space saver, ds=es (needs to be restored)
 	push ds
@@ -130,10 +126,6 @@ next_vbe:
 	inc si
 	jmp top_vbe
 
-error:
-	xchg bx,bx
-	jmp error
-
 fun_kzero:
 	; IN seg on stack
 	pop es
@@ -180,11 +172,6 @@ done_vbe:
 
 	call fun_getMMap
 
-	jc  error
-
-	cmp eax, ebp ; success will copy old edx to eax (edx is trash)
-	jne error
-
 	test ebx, ebx ; ebx == 0 is done
 	je   doneMap
 
@@ -215,8 +202,6 @@ nextMap:
 	; advance to next
 incMap:
 	add di, 24
-	cmp di, 0xfff0
-	je  error ; ran out of buffer space (2730 entries!)
 
 	jmp nextMap
 
