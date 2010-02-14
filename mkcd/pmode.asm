@@ -7,16 +7,13 @@ PAGE_SUPER     equ   4
 PAGE_LEN       equ   0x01000
 
 	; clear blocks of memory
-	xor   ax, ax
-	mov   ds, ax
-	;mov   ax, 0xdead ; testing mem range
 	xor   di, di
+	mov   ds, di
 
 	; GDT/IDT (64KB at GDT_BASE)
 	push  (GDT_BASE >> 4)
-	pop   es
-	mov   cx, 0x8000
-	rep stosw
+	call fun_kzero
+
 	; entry0 - null segment
 	; entry1 - code segment
 	;     [es:0x08] base = 0
@@ -31,9 +28,7 @@ PAGE_LEN       equ   0x01000
 
 	; page tables (PML,PDP,PD at PAGE_BASE)
 	push  (PAGE_BASE >> 4)
-	pop   es
-	mov   cx, 0x8000
-	rep stosw
+	call fun_kzero
 
 	; PML4 point to next
 	mov   [es:0x0000], DWORD ((PAGE_BASE + PAGE_LEN) \
