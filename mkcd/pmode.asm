@@ -8,6 +8,7 @@ PAGE_LEN       equ   0x01000
 
 	; clear blocks of memory
 	xor   ax, ax
+	mov   ds, ax
 	;mov   ax, 0xdead ; testing mem range
 	xor   di, di
 
@@ -62,7 +63,7 @@ PAGE_LEN       equ   0x01000
 	cli
 
 	mov   eax, cr0
-	or    ax, 1
+	or    al, 1
 	mov   cr0, eax
 
 	; jump to the next instruction, to load the seg desc
@@ -77,12 +78,12 @@ codePE:
 	; set long mode
 	mov   ecx, 0xC000_0080
 	rdmsr
-	or    ax, 0x100
+	or    ah, 0x1
 	wrmsr
 
 	; set L bit in code segment
-	mov   eax, GDT_BASE+0xe
-	bts   word [eax], 5
+	mov  eax, GDT_BASE+0xe
+	or   word [eax], 32
 
 	; turn on paging
 	mov   eax, cr0
