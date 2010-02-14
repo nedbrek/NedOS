@@ -29,7 +29,7 @@ BIOS_SET_A20M	equ	0x2401
 	bits 16
 
 	; clear boot output block (BOB)
-	push (BOOT_PARMS >> 4)
+	mov ax, (BOOT_PARMS >> 4)
 	call fun_kzero
 
 	; set up the stack (needed for BIOS calls)
@@ -136,7 +136,8 @@ error:
 
 fun_kzero:
 	; IN seg on stack
-	pop es
+	push ax
+	pop  es
 	xor ax, ax
 	;mov   ax, 0xdead ; testing mem range
 	mov cx, 0x8000
@@ -170,7 +171,7 @@ done_vbe:
 	mov [di], dx
 
 	; get mem map
-	push (MMAP_BASE >> 4)
+	mov ax, (MMAP_BASE >> 4)
 	call fun_kzero
 
 	mov ebp, 'PAMS' ; 'SMAP' little endian
