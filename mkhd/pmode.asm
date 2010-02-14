@@ -11,7 +11,7 @@ PAGE_LEN       equ   0x01000
 	mov   ds, di
 
 	; GDT/IDT (64KB at GDT_BASE)
-	push  (GDT_BASE >> 4)
+	mov ax, (GDT_BASE >> 4)
 	call fun_kzero
 
 	; entry0 - null segment
@@ -27,7 +27,7 @@ PAGE_LEN       equ   0x01000
 	; leave space for IDT
 
 	; page tables (PML,PDP,PD at PAGE_BASE)
-	push  (PAGE_BASE >> 4)
+	mov ax, (PAGE_BASE >> 4)
 	call fun_kzero
 
 	; PML4 point to next
