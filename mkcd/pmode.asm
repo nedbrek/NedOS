@@ -83,7 +83,7 @@ codePE:
 
 	; set L bit in code segment
 	mov  eax, GDT_BASE+0xe
-	or   word [eax], 32
+	or   byte [eax], 32
 
 	; turn on paging
 	mov   eax, cr0
