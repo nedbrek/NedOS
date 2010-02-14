@@ -6,40 +6,40 @@ PAGE_SUPER     equ   4
 
 PAGE_LEN       equ   0x01000
 
-	; clear blocks of memory
-	xor   di, di
-	mov   ds, di
-
 	; GDT/IDT (64KB at GDT_BASE)
 	mov ax, (GDT_BASE >> 4)
+	mov ds, ax ; space saver
 	call fun_kzero
 
 	; entry0 - null segment
 	; entry1 - code segment
-	;     [es:0x08] base = 0
-	mov   [es:0x0c], WORD 0x9800
-	mov   [es:0x0e], BYTE 0xf
+	;     [0x08] base = 0
+	mov   [0x0c], WORD 0x9800
+	mov   [0x0e], BYTE 0xf
 	; entry2 - data segment
-	;     [es:0x10] base = 0
-	mov   [es:0x14], WORD 0x9300
-	mov   [es:0x16], BYTE 0xf
+	;     [0x10] base = 0
+	mov   [0x14], WORD 0x9300
+	mov   [0x16], BYTE 0xf
 
 	; leave space for IDT
 
 	; page tables (PML,PDP,PD at PAGE_BASE)
 	mov ax, (PAGE_BASE >> 4)
+	mov ds, ax ; space saver
 	call fun_kzero
 
 	; PML4 point to next
-	mov   [es:0x0000], DWORD ((PAGE_BASE + PAGE_LEN) \
+	mov   [0x0000], DWORD ((PAGE_BASE + PAGE_LEN) \
 	                        |PAGE_PRESENT|PAGE_WRITE|PAGE_SUPER)
 
 	; PDP point to next
-	mov   [es:PAGE_LEN], DWORD ((PAGE_BASE + 2*PAGE_LEN) \
+	mov   [PAGE_LEN], DWORD ((PAGE_BASE + 2*PAGE_LEN) \
 	                        |PAGE_PRESENT|PAGE_WRITE|PAGE_SUPER)
 
 	; 2meg identity
-	mov   [es:2*PAGE_LEN], BYTE (0x80 |PAGE_PRESENT|PAGE_WRITE|PAGE_SUPER)
+	mov   [2*PAGE_LEN], BYTE (0x80 |PAGE_PRESENT|PAGE_WRITE|PAGE_SUPER)
+
+	mov ds, ax ; needed for lgdt (ax is 0 from kzero)
 
 	; load the page table base
 	mov   eax, PAGE_BASE
