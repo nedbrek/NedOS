@@ -21,7 +21,6 @@ PAGE_LEN       equ   0x01000
 	mov [rsi+PAGE_LEN+3*8], DWORD ((PAGE_BASE + 5*PAGE_LEN) \
                     |PAGE_PRESENT|PAGE_WRITE|PAGE_SUPER)
 
-	; blank the screen
 	;; install VRAM pages
 	;;; get the video mem base
 	mov  edi, [BOOT_PARMS+0x10]
@@ -61,20 +60,51 @@ PAGE_LEN       equ   0x01000
 	mov rax, cr3
 	mov cr3, rax
 
-	;; calculate size of VRAM
-	mov  eax, [BOOT_PARMS+4]
+	xchg bx, bx
+	; find ACPI tables
+	;; look in EBDA
+	cld
+	mov rax, 'RSD PTR '
+	movzx edi, WORD [0x40e]
+	shl edi, 4
+	mov ecx, 0xa0000
+	sub ecx, edi
+	shr ecx, 3
+	repne scasq
+	je acpi_found
+
+	;; look in BIOS high mem
+	mov edi, 0xe_0000
+	mov ecx, (0x10_0000 - 0xe_0000) >> 3
+	repne scasq
+	jne panic
+
+acpi_found:
+	; RSDP is at edi-8
+	sub edi, 8
+
+	mov  rax, 0x0000_FF00_0000_00FF
+	call fill_screen
+	jmp die
+
+fill_screen:
+	mov  edx, [BOOT_PARMS+4]
 	mov  ecx, [BOOT_PARMS+8]
-	imul ecx, eax
+	imul ecx, edx
 	shr  ecx, 1 ; we will write 2 pixels per
 
-	;; build the pixel
-	mov  rax, 0x00FF_0000_00FF_0000
-
 	;; write
+	mov  edi, [BOOT_PARMS+0x10]
 	rep stosq
+	ret
+
+panic:
+	; show red screen of death
+	mov  rax, 0x00FF_0000_00FF_0000
+	call fill_screen
 
 	; loop forever
-loop:
+die:
 	inc rax
-	jmp loop
+	jmp die
 
