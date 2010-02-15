@@ -81,6 +81,7 @@ struct BootCatalog
 	void print(void);
 
 	uint32_t getBootImageLBA(void) const;
+	BCInit*  getBCE(unsigned i);
 };
 
 #endif
