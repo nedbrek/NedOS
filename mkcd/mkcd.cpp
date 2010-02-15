@@ -48,10 +48,10 @@ int main(int argc, char **argv)
 		return -2;
 	}
 
-	char buf[2048];
-	memset(buf, 0, 2048);
+	char buf[512];
+	memset(buf, 0, 512);
 
-	size_t numRead = fread(buf, 1, 2048, bootFile);
+	size_t numRead = fread(buf, 1, 512, bootFile);
 	if( numRead == 0 )
 	{
 		printf("Error: No bytes in boot image.\n");
@@ -61,19 +61,40 @@ int main(int argc, char **argv)
 	unsigned numSec = 0;
 	while( !feof(bootFile) )
 	{
-		fwrite(buf, 1, 2048, ofile);
+		fwrite(buf, 1, 512, ofile);
 		++numSec;
 
-		numRead = fread(buf, 1, 2048, bootFile);
+		numRead = fread(buf, 1, 512, bootFile);
 	}
 
 	if( numRead != 0 )
 	{
-		memset(buf+numRead, 0, 2048-numRead);
-		fwrite(buf, 1, 2048, ofile);
+		memset(buf+numRead, 0, 512-numRead);
+		fwrite(buf, 1, 512, ofile);
 		++numSec;
 	}
 	printf("Wrote %d boot sectors\n", numSec);
+
+	// update the boot catalog entry
+	if( fseek(ofile, 19 * 2048, SEEK_SET) )
+	{
+		printf("Error: Unable to seek back to boot catalog\n");
+		return -2;
+	}
+
+	// pull the sector
+	char secBuf[2048];
+	fread(secBuf, 1, 2048, ofile);
+
+	// update it
+	BootCatalog *bcp = (BootCatalog*)secBuf;
+	BCInit *bcip = bcp->getBCE(1);
+
+	bcip->numSec_ = numSec;
+
+	// write it back
+	fseek(ofile, 19 * 2048, SEEK_SET);
+	fwrite(secBuf, 1, 2048, ofile);
 
 	return 0;
 }
