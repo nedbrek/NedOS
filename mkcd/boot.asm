@@ -4,21 +4,20 @@
 ; 00400..004FF BIOS data
 ; 00500..07BFF stack (30464 bytes)
 ; 07C00..07DFF boot sector
-; 07E00..0FFFF free
-; 10000..1FFFF boot output block
-; 20000..2FFFF GDT+IDT
-; 30000..3FFFF stage 1 page tables
-; 40000..4FFFF memory map
-; 50000..7FFFF free
+; 07E00..3FFFF free
+; 40000..4FFFF boot output block
+; 50000..5FFFF GDT+IDT
+; 60000..6FFFF stage 1 page tables
+; 70000..7FFFF memory map
 ; 80000..9FBFF possible BIOS EDA
 ; 9FC00..9FFFF definite BIOS EDA
 ; A0000..FFFFF ROM
 
 ; constants
-BOOT_PARMS  	equ	0x10000 ; information from boot time
-GDT_BASE    	equ	0x20000
-PAGE_BASE   	equ	0x30000
-MMAP_BASE   	equ	0x40000
+BOOT_PARMS  	equ	0x40000 ; information from boot time
+GDT_BASE    	equ	0x50000
+PAGE_BASE   	equ	0x60000
+MMAP_BASE   	equ	0x70000
 
 BIOS_GET_MMAP	equ   0xe820
 BIOS_SET_A20M	equ	0x2401
