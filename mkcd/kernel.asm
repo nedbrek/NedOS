@@ -1,5 +1,4 @@
-BOOT_PARMS     equ   0x40000 ; information from boot time
-PAGE_BASE      equ   0x60000
+%include "mmap.asm"
 
 PAGE_PRESENT   equ   1
 PAGE_WRITE     equ   2
