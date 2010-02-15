@@ -85,17 +85,11 @@ codePE:
 	bts   eax, 31
 	mov   cr0, eax
 
-	jmp 8:code64
-
-	bits 64
-code64: ; we made it!
-
-	; loop forever
-loop:
-	inc rax
-	jmp loop
+	jmp 8:0x7e00
 
 gdt:
 	dw 32
 	dd GDT_BASE
+
+	times 512-($-$$) db 0
 
