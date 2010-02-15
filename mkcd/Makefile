@@ -27,6 +27,9 @@ DependAsm.Make: *.asm
 %: %.asm
 	@nasm -Ox $<
 
-run: mkcd.exe boot
-	@./mkcd.exe boot
+os.bin: boot kernel
+	cat boot kernel > os.bin
+
+run: mkcd.exe os.bin
+	@./mkcd.exe os.bin
 
