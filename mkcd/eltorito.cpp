@@ -135,3 +135,8 @@ uint32_t BootCatalog::getBootImageLBA(void) const
 	return bci->imageLoc_;
 }
 
+BCInit* BootCatalog::getBCE(unsigned i)
+{
+	return (BCInit*)entries_+i;
+}
+
