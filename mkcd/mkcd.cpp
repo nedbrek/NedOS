@@ -58,9 +58,11 @@ int main(int argc, char **argv)
 		return -3;
 	}
 
+	unsigned numSec = 0;
 	while( !feof(bootFile) )
 	{
 		fwrite(buf, 1, 2048, ofile);
+		++numSec;
 
 		numRead = fread(buf, 1, 2048, bootFile);
 	}
@@ -69,7 +71,9 @@ int main(int argc, char **argv)
 	{
 		memset(buf+numRead, 0, 2048-numRead);
 		fwrite(buf, 1, 2048, ofile);
+		++numSec;
 	}
+	printf("Wrote %d boot sectors\n", numSec);
 
 	return 0;
 }
