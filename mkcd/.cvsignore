@@ -1,3 +1,5 @@
 Depend.Make
 DependAsm.Make
 boot
+kernel
+os.bin
