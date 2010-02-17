@@ -25,42 +25,18 @@ PAGE_LEN       equ   0x01000
 	;;; get the video mem base
 	mov  edi, [BOOT_PARMS+0x10]
 
-	;;; find top two bits (pd offset)
 	mov eax, edi
-	shr eax, 30
-
-	;;; add two for pd offset
-	inc eax ; shift past PML4
-	inc eax ; shift past pdp
-
-	;;; multiply by PAGE_LEN
-	shl eax, 12
-
-	add rsi, rax ; done pd offset
-
-	;;; get pde (bits 29..21)
-	mov eax, edi
-	shr eax, 21
-	and eax, 0x1ff
-
-	shl eax, 3 ; scale for pde size
-
-	add rsi, rax ; add pde offset
-
-	;;; build pde
-	mov eax, edi
-	or  eax, 0x80|PAGE_PRESENT|PAGE_WRITE|PAGE_SUPER
-	mov [rsi], eax
+	call add_2M_page
+	;;; leaves rsi pointing to the pde
 
 	;;; need two for 4 MB VRAM
-	add eax, 0x20_0000
+	add eax, 0x20_0000 |0x80|PAGE_PRESENT|PAGE_WRITE|PAGE_SUPER
 	mov [rsi+8], eax
 
 	;; flush TLB
 	mov rax, cr3
 	mov cr3, rax
 
-	xchg bx, bx
 	; find ACPI tables
 	;; look in EBDA
 	cld
@@ -82,10 +58,56 @@ PAGE_LEN       equ   0x01000
 acpi_found:
 	; RSDP is at edi-8
 	sub edi, 8
+	; RSDT is at offset 16
+	mov edi, [rdi+16]
+
+	mov eax, edi
+	mov esi, PAGE_BASE
+	call add_2M_page
 
 	mov  rax, 0x0000_FF00_0000_00FF
 	call fill_screen
 	jmp die
+
+add_2M_page:
+	; IN eax - vaddr to add a page for
+	; IN esi - start of page table (CR3)
+	; OUT esi - addr of pde
+	xchg bx, bx
+	push r8
+
+	mov r8d, eax
+
+	;;; find top two bits (pd offset)
+	shr eax, 30
+
+	;;; add two for pd offset
+	inc eax ; shift past PML4
+	inc eax ; shift past pdp
+
+	;;; multiply by PAGE_LEN
+	shl eax, 12
+
+	add esi, eax ; done pd offset
+
+	;;; get pde (bits 29..21)
+	mov eax, r8d
+	shr eax, 21
+	and eax, 0x1ff
+
+	shl eax, 3 ; scale for pde size
+
+	add esi, eax ; add pde offset
+
+	;;; build pde
+	mov eax, r8d
+	and eax, 0xffe0_0000
+	or  eax, 0x80|PAGE_PRESENT|PAGE_WRITE|PAGE_SUPER
+	mov [rsi], eax
+
+	mov eax, r8d
+	pop r8
+	ret
 
 fill_screen:
 	mov  edx, [BOOT_PARMS+4]
