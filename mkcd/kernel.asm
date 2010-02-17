@@ -74,9 +74,9 @@ add_2M_page:
 	; IN esi - start of page table (CR3)
 	; OUT esi - addr of pde
 	xchg bx, bx
-	push r8
+	push rdi
 
-	mov r8d, eax
+	mov edi, eax
 
 	;;; find top two bits (pd offset)
 	shr eax, 30
@@ -91,7 +91,7 @@ add_2M_page:
 	add esi, eax ; done pd offset
 
 	;;; get pde (bits 29..21)
-	mov eax, r8d
+	mov eax, edi
 	shr eax, 21
 	and eax, 0x1ff
 
@@ -100,13 +100,13 @@ add_2M_page:
 	add esi, eax ; add pde offset
 
 	;;; build pde
-	mov eax, r8d
+	mov eax, edi
 	and eax, 0xffe0_0000
 	or  eax, 0x80|PAGE_PRESENT|PAGE_WRITE|PAGE_SUPER
 	mov [rsi], eax
 
-	mov eax, r8d
-	pop r8
+	mov eax, edi
+	pop rdi
 	ret
 
 fill_screen:
