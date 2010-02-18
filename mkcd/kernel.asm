@@ -23,9 +23,7 @@ PAGE_LEN       equ   0x01000
 
 	;; install VRAM pages
 	;;; get the video mem base
-	mov  edi, [BOOT_PARMS+0x10]
-
-	mov eax, edi
+	mov  eax, [BOOT_PARMS+0x10]
 	call add_2M_page
 	;;; leaves rsi pointing to the pde
 
@@ -37,34 +35,39 @@ PAGE_LEN       equ   0x01000
 	mov rax, cr3
 	mov cr3, rax
 
-	; find ACPI tables
-	;; look in EBDA
-	cld
+	; find ACPI tables (RSDP)
+	;; there is no well known addr, must search for the key
 	mov rax, 'RSD PTR '
-	movzx edi, WORD [0x40e]
-	shl edi, 4
-	mov ecx, 0xa0000
-	sub ecx, edi
-	shr ecx, 3
-	repne scasq
-	je acpi_found
 
-	;; look in BIOS high mem
+	;; look in EBDA
+	movzx edi, WORD [0x40e] ; EBDA paragraph addr
+	shl edi, 4 ; convert to linear
+
+	mov ecx, 0xa0000 ; stop at top of free mem
+	sub ecx, edi ; byte count
+	shr ecx, 3 ; we will scan 8 B per
+
+	cld
+	repne scasq ; search!
+	je acpi_found ; yea!
+
+	;;else look in BIOS high mem
 	mov edi, 0xe_0000
 	mov ecx, (0x10_0000 - 0xe_0000) >> 3
 	repne scasq
-	jne panic
+	jne panic ; oh no
 
 acpi_found:
-	; RSDP is at edi-8
-	sub edi, 8
+	; RSDP is at edi-8 (scas leaves things for next)
 	; RSDT is at offset 16
-	mov edi, [rdi+16]
+	mov edi, [rdi-8+16]
 
+	;; likely need a new page to get at it
 	mov eax, edi
 	mov esi, PAGE_BASE
 	call add_2M_page
 
+	; success, aqua screen of life
 	mov  rax, 0x0000_FF00_0000_00FF
 	call fill_screen
 	jmp die
@@ -121,6 +124,8 @@ fill_screen:
 	ret
 
 panic:
+	; stack may be trashed
+	mov rsp, 0x7c00
 	; show red screen of death
 	mov  rax, 0x00FF_0000_00FF_0000
 	call fill_screen
