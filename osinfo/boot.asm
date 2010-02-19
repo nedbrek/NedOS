@@ -25,19 +25,40 @@ start:
 
 	xchg bx,bx
 	mov bx, str_hello
-nextc:
-	mov al, [bx]
-	test al, al
-	jz  donec
+	call puts
 
-	call putc
-	inc bx
-	jmp  nextc
-donec:
+	mov bx, str_longTest
+	call puts
 
 	mov al, 0xde
 	call printByte
+	mov ax, 0x070a
+	call putc
 
+	mov bx, str_VBE_check
+	call puts
+
+	push 0x4000
+	pop  es
+	mov di, 0xfd00
+	mov DWORD [es:di], '2EBV'
+	mov ax, 0x4f00
+	int 0x10
+
+	cmp ax, 0x004f
+	jne .vbe_fail
+
+	mov bx, str_SUCCESS
+	jmp .vbe_print
+
+.vbe_fail:
+	mov bx, str_FAIL
+
+.vbe_print:
+	mov ah, 7
+	call puts
+
+	xchg bx,bx
 end:
 	jmp end
 
@@ -87,6 +108,25 @@ putc:
 	pop bx
 	ret
 
+puts:
+	;  IN - bx ptr to str
+	;  IN - AH attr
+	; OUT - AX trashed
+	push bx
+
+.nextc:
+	mov  al, [bx]
+	test al, al
+	jz   .done
+
+	call putc
+	inc  bx
+	jmp  .nextc
+
+.done:
+	pop bx
+	ret
+
 printNibble:
 	;  IN AL - nibble (0..F)
 	;  IN AH - attr
@@ -133,4 +173,13 @@ cursor:
 
 str_hello:
 	db "Hello world",0xa,0
+str_longTest:
+	db "A very, very, very, very, very, super, extra, mega, long, string "
+	db "to test the line wrap code, don't you know",0xa,0
+str_VBE_check:
+	db "Checking Get VBE info...",0
+str_SUCCESS:
+	db "Success",0
+str_FAIL:
+	db "Fail",0
 
