@@ -22,7 +22,7 @@ int main(int argc, char **argv)
 	if( !ofile )
 	{
 		printf("%s does not exist, creating.\n", fname.c_str());
-		ofile = fopen(fname.c_str(), "wb");
+		ofile = fopen(fname.c_str(), "w+b");
 
 		// write initial zero sectors
 		uint8_t bZero = 0;
