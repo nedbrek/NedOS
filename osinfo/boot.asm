@@ -35,6 +35,7 @@ start:
 	mov ax, 0x070a
 	call putc
 
+vbe_check:
 	mov bx, str_VBE_check
 	call puts
 
@@ -58,13 +59,90 @@ start:
 	mov ah, 7
 	call puts
 
+	mov al, 0xa
+	call putc
+
+	cmp bx, str_FAIL
+	je  .vbe_mode_fail
+
+	mov bx, str_VBE_md_desc
+	call puts
+
+	; display available VBE modes
+	lds si, [es:di+14] ; load list seg:off into ds:si
+	add di, 0x200 ; shift past VESA info block
+
+	;; fill the mode info block
+.top_vbe:
+	mov cx, [si] ; mode we will consider
+	cmp cx, 0xffff ; -1 is end of list
+	je  .done_vbe
+
+	mov ax, 0x4f01
+	int 0x10
+	cmp ax, 0x004f
+	jne .vbe_mode_fail
+
+	;;; space saver, ds=es (needs to be restored)
+	push ds
+	push es
+	pop  ds
+
+	mov ax, [di]
+	and al, 0x99
+	cmp al, 0x99
+	jne .next_vbe
+
+	;; examine x,y,bpp,mm to see if we want it
+	mov al, [di+27] ; get mem mode
+	and al, 0xfd ; check 4 and 6
+	cmp al, 4
+	jne .next_vbe
+
+	mov al, [di+25] ; get bpp
+	cmp al, 32
+	jne .next_vbe
+
+	mov ah, 0x07
+	mov dx, cx
+	call printWord
+
+	mov al, ' '
+	call putc
+
+	mov dx, [di+18] ; get width
+	call printWord
+
+	mov al, ' '
+	call putc
+
+	mov dx, [di+20] ; get height
+	call printWord
+
+	mov al, 0xa
+	call putc
+
+.next_vbe:
+	pop ds
+	inc si
+	inc si
+	jmp .top_vbe
+
+.vbe_mode_fail:
+.done_vbe:
+
 	xchg bx,bx
 end:
 	jmp end
 
 putc:
 	;  IN - AL char to print (AH is attr)
+	;  IN - AH attr
+	push ds
 	push bx
+
+	push 0
+	pop ds
 	mov bx, [cursor]
 
 	; check for LF
@@ -104,8 +182,16 @@ putc:
 	pop es
 
 .putc_earlyOut:
+	push ax
+	xor ax, ax
+	cmp bx, 0xfa0
+	;ja  .shift_screen
+	cmova bx, ax
+	pop ax
+
 	mov [cursor], bx
 	pop bx
+	pop ds
 	ret
 
 puts:
@@ -168,6 +254,16 @@ printByte:
 	pop cx
 	ret
 
+printWord:
+	; IN AH - attr
+	; IN DX - word
+	mov al, dh
+	call printByte
+	mov al, dl
+	call printByte
+
+	ret
+
 cursor:
 	dw 0x00 ; offset into VRAM r{0..24}*160+c{0..79}*2
 
@@ -182,4 +278,6 @@ str_SUCCESS:
 	db "Success",0
 str_FAIL:
 	db "Fail",0
+str_VBE_md_desc:
+	db "Mode wd   ht",0xa,0
 
