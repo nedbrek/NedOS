@@ -1,2 +1,5 @@
 boot
 os.bin
+lboot.txt
+kernel
+cursor.h
