@@ -131,9 +131,7 @@ vbe_check:
 .vbe_mode_fail:
 .done_vbe:
 
-	xchg bx,bx
-end:
-	jmp end
+	jmp pmode
 
 putc:
 	;  IN - AL char to print (AH is attr)
@@ -280,4 +278,7 @@ str_FAIL:
 	db "Fail",0
 str_VBE_md_desc:
 	db "Mode wd   ht",0xa,0
+
+pmode:
+%include "pmode.asm"
 
