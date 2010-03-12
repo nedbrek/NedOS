@@ -85,8 +85,25 @@ putc:
 	push rax
 	xor eax, eax
 	cmp ebx, 0xfa0
-	; ja .shift_screen
-	cmovae ebx, eax
+	jb .finish
+
+.shift_screen:
+	push rsi
+	push rdi
+	push rcx
+
+	mov esi, 0xb8000+80*2
+	mov edi, 0xb8000
+	mov ecx, (160*25) >> 3
+	rep movsq
+
+	mov ebx, 160*24
+
+	pop  rcx
+	pop  rdi
+	pop  rsi
+
+.finish:
 	pop rax
 
 	mov [cursor], bx
