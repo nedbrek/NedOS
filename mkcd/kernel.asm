@@ -24,6 +24,7 @@ PAGE_LEN       equ   0x01000
 	;; install VRAM pages
 	;;; get the video mem base
 	mov  eax, [BOOT_PARMS+0x10]
+	;Ned set WC
 	call add_2M_page
 	;;; leaves rsi pointing to the pde
 
@@ -67,9 +68,19 @@ acpi_found:
 	mov esi, PAGE_BASE
 	call add_2M_page
 
+	; draw a character
+
 	; success, aqua screen of life
 	mov  rax, 0x0000_FF00_0000_00FF
 	call fill_screen
+
+	xor eax, eax    ; pixel color
+	mov ecx, 80*6   ; rect width (80 chars in px)
+	mov edi, 50*10*4; y coord (50 chars in bytes)
+	mov edx, 80*6*4 ; x coord (80 chars in bytes)
+	mov ebx, 25*10  ; height, 25 chars
+	call fill_rect
+
 	jmp die
 
 add_2M_page:
@@ -112,7 +123,75 @@ add_2M_page:
 	pop rdi
 	ret
 
+fill_row:
+	; IN eax - pixel to fill
+	; IN rcx - width in pixels
+	; IN edi - y coord (row num)
+	; IN edx - x coord (px, ie. col*4)
+	; OUT ecx - 0
+	; OUT edi - pixel after last in row
+
+	;; scale y coord by screen width
+	imul edi, [BOOT_PARMS+4]
+
+	;; add x coord
+	add  edi, edx
+
+	;; add to lfb base
+	add  edi, [BOOT_PARMS+0x10]
+
+	rep stosd
+
+	ret
+
+fill_rect:
+	; IN eax - pixel to fill
+	; IN rcx - width in pixels
+	; IN edi - y coord (bytes)
+	; IN edx - x coord (bytes, ie. col*4)
+	; IN ebx - height
+	xchg bx,bx
+
+	push rsi
+	;; save width
+	push rcx
+
+	;; get screen width
+	mov esi, [BOOT_PARMS+4]
+
+	;; scale y coord by screen width
+	imul edi, esi
+
+	;; subtract the row width
+	sub esi, ecx
+	;; scale to pixels
+	shl esi, 2
+
+	;; add x coord
+	add  edi, edx
+
+	;; add to lfb base
+	add  edi, [BOOT_PARMS+0x10]
+
+.fill_row:
+	rep stosd
+	dec ebx
+	jz .end
+
+	add edi, esi
+	mov ecx, [rsp]
+	jmp .fill_row
+
+.end:
+	pop rcx
+	pop rsi
+	ret
+
 fill_screen:
+	; IN rax - color to fill
+	; OUT rdx - screen width
+	; OUT rcx - 0
+	; OUT rdi - end of screen mem
 	mov  edx, [BOOT_PARMS+4]
 	mov  ecx, [BOOT_PARMS+8]
 	imul ecx, edx
@@ -134,4 +213,7 @@ panic:
 die:
 	inc rax
 	jmp die
+
+cap_h:
+	dq 0x228A2FA28A2000
 
