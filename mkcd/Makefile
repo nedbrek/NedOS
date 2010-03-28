@@ -21,8 +21,9 @@ clean:
 Depend.Make: *.cpp *.h
 	@g++ -MM $^ > Depend.Make
 
-DependAsm.Make: *.asm
-	@nasm -M boot.asm > DependAsm.Make
+DependAsm.Make: boot.asm kernel.asm
+	@nasm -M boot.asm    > DependAsm.Make
+	@nasm -M kernel.asm >> DependAsm.Make
 
 %: %.asm
 	@nasm -Ox $<
