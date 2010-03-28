@@ -1,9 +1,31 @@
 %include "cursor.h"
+%include "../mkcd/mmap.asm"
+
+PAGE_LEN       equ   0x01000
+PAGE_PRESENT   equ   1
+PAGE_WRITE     equ   2
+PAGE_SUPER     equ   4
 
 	org 0x8000
 
 	bits 64
 
+	; update page tables
+	mov esi, PAGE_BASE
+
+	;; install pds for 1..2, 2..3 and 3..4 G
+	mov [rsi+PAGE_LEN+1*8], DWORD ((PAGE_BASE + 3*PAGE_LEN) \
+                 	|PAGE_PRESENT|PAGE_WRITE|PAGE_SUPER)
+	mov [rsi+PAGE_LEN+2*8], DWORD ((PAGE_BASE + 4*PAGE_LEN) \
+                 	|PAGE_PRESENT|PAGE_WRITE|PAGE_SUPER)
+	mov [rsi+PAGE_LEN+3*8], DWORD ((PAGE_BASE + 5*PAGE_LEN) \
+                 	|PAGE_PRESENT|PAGE_WRITE|PAGE_SUPER)
+
+	;; flush TLB
+	mov rax, cr3
+	mov cr3, rax
+
+	; print stuff
 	xchg bx,bx
 	mov eax, 0x0700
 	mov ebx, str_hello64
@@ -41,10 +63,45 @@ debug_printMSRs:
 	inc ecx
 	cmp ecx, 0x210
 	jb .msr_MTRR_loop
-	
+
+	; find ACPI tables (RSDP)
+	;; there is no well known addr, must search for the key
+	mov rax, 'RSD PTR '
+
+	;; look in EBDA
+	movzx edi, WORD [0x40e] ; EBDA paragraph addr
+	shl edi, 4 ; convert to linear
+
+	mov ecx, 0xa0000 ; stop at top of free mem
+	sub ecx, edi ; byte count
+	shr ecx, 3 ; we will scan 8 B per
+
+	cld
+	repne scasq ; search!
+	je acpi_found ; yea!
+
+	;;else look in BIOS high mem
+	mov edi, 0xe_0000
+	mov ecx, (0x10_0000 - 0xe_0000) >> 3
+	repne scasq
+	jne panic ; oh no
+
+acpi_found:
+	; RSDP is at edi-8 (scas leaves things for next)
+	; RSDT is at offset 16
+	mov edi, [rdi-8+16]
+
 end:
 	inc rax
 	jmp end
+
+str_panic:
+	db "Kernel panic",0
+panic:
+	mov esp, 0x7c00
+	mov eax, 0x0700
+	mov ebx, str_panic
+	call puts
 
 putc:
 	;  IN - AL char to print
