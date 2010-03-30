@@ -81,6 +81,11 @@ acpi_found:
 	mov ebx, 25*10  ; height, 25 chars
 	call fill_rect
 
+	mov rax, 0xffff_ffff_0000_0000
+	mov rdx, [cap_h]
+	mov esi, termLR_ctx
+	call vputc
+
 	jmp die
 
 add_2M_page:
@@ -142,6 +147,80 @@ fill_row:
 
 	rep stosd
 
+	ret
+
+vputc:
+	; IN rax - color (low bits bg)
+	; IN rdx - char bmp (8B mask)
+	; IN esi - context ptr
+	; OUT edx - zero
+	push rbp
+	push rdi
+	push rbx
+	push rcx
+
+	; get upper right of char
+	;; lfb + (console.y + cursor.y * 10) * screen.width +
+	;; console.x + cursor.x * 6
+
+	;;; edi = cursor.y * 10
+	imul edi, [rsi+20], 10
+	;;; edi += console.y
+	add  edi, [rsi+ 4]
+
+	;;; ebx = screen.width
+	mov ebx, [BOOT_PARMS+4]
+
+	;;; edi = (console.y + cursor.y * 10) * screen.width
+	imul edi, ebx
+
+	;;; ecx = cursor.x * 6 + console.x
+	imul ecx, [rsi+16], 6
+	add  ecx, [rsi]
+
+	add edi, ecx
+
+	;; scale px to bytes
+	shl edi, 2
+
+	;; add to lfb base
+	add  edi, [BOOT_PARMS+0x10]
+
+	sub ebx, 6 ; wrap short 6 px
+	;; scale px to bytes
+	shl ebx, 2
+
+	shr rax, 32
+	shl rdx,  4 ; 4 dead bits on top
+	mov ebp, 10 ; 10 rows
+
+	xchg bx,bx
+.put_row:
+	;; put 6 px (burn 6 bits of bmp)
+	mov ecx, 6
+
+.put_px:
+	shl rdx, 1
+
+	jnc .no_put
+	mov [rdi], eax
+.no_put:
+
+	add edi, 4
+	dec ecx
+	jnz .put_px
+
+	;; wrap to next row (add screen_width - 6)
+	add edi, ebx
+	dec ebp
+	jnz .put_row
+
+	; update cursor
+
+	pop rcx
+	pop rbx
+	pop rdi
+	pop rbp
 	ret
 
 fill_rect:
@@ -213,6 +292,14 @@ panic:
 die:
 	inc rax
 	jmp die
+
+termLR_ctx:
+	dd 480 ; console x pos (px)
+	dd 500 ; console y pos (px)
+	dd  50 ; width (chars)
+	dd  25 ; height (chars)
+	dd   0 ; cursor X (chars)
+	dd   0 ; cursor Y (chars)
 
 cap_h:
 	dq 0x228A2FA28A2000
