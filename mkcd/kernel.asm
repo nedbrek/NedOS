@@ -81,9 +81,12 @@ acpi_found:
 	mov ebx, 25*10  ; height, 25 chars
 	call fill_rect
 
-	mov rax, 0xffff_ffff_0000_0000
-	mov rdx, [cap_h]
+	mov eax, 0xffff_ffff
+	mov rdx, 'h'
 	mov esi, termLR_ctx
+	call vputc
+
+	mov rdx, 'e'
 	call vputc
 
 	jmp die
@@ -150,8 +153,8 @@ fill_row:
 	ret
 
 vputc:
-	; IN rax - color (low bits bg)
-	; IN rdx - char bmp (8B mask)
+	; IN rax - color (high bits bg)
+	; IN rdx - char code
 	; IN esi - context ptr
 	; OUT edx - zero
 	push rbp
@@ -159,6 +162,13 @@ vputc:
 	push rbx
 	push rcx
 
+	cmp edx, 10
+	je .next_row
+
+	sub edx, 'e'
+	mov rdx, [rdx*8+low_e]
+
+.normal:
 	; get upper right of char
 	;; lfb + (console.y + cursor.y * 10) * screen.width +
 	;; console.x + cursor.x * 6
@@ -190,11 +200,9 @@ vputc:
 	;; scale px to bytes
 	shl ebx, 2
 
-	shr rax, 32
 	shl rdx,  4 ; 4 dead bits on top
 	mov ebp, 10 ; 10 rows
 
-	xchg bx,bx
 .put_row:
 	;; put 6 px (burn 6 bits of bmp)
 	mov ecx, 6
@@ -216,6 +224,29 @@ vputc:
 	jnz .put_row
 
 	; update cursor
+	mov ebx, [rsi+16]
+	mov ecx, [rsi+20]
+
+	xchg bx,bx
+	;; next col
+	inc ebx
+	;; check for wrap
+	cmp ebx, [rsi+8]
+	jb .done
+
+.next_row:
+	;; next row
+	mov ebx, 0
+
+	inc ecx
+	cmp ecx, [rsi+12]
+	jb .done
+
+	;; shift screen
+
+.done:
+	mov [rsi+16], ebx
+	mov [rsi+20], ecx
 
 	pop rcx
 	pop rbx
@@ -301,6 +332,50 @@ termLR_ctx:
 	dd   0 ; cursor X (chars)
 	dd   0 ; cursor Y (chars)
 
-cap_h:
+hi_str:
+	db "Hello world\n",0
+
+cap_h: ; 72
 	dq 0x228A2FA28A2000
+
+low_e: ; 101
+	dq 0x1c8be81c000
+low_f: ; 102
+	dq 0xc490f10410000
+low_g: ; 103
+	dq 0x1e8a278289c
+low_h: ; 104
+	dq 0x2082cca28a2000
+low_i: ; 105
+	dq 0x801820821c000
+low_j: ; 106
+	dq 0x200608209248c
+low_k: ; 107
+	dq 0x20822938922000
+low_l: ; 108
+	dq 0x1820820821c000
+low_m: ; 109
+	dq 0x34aaaaa2000
+low_n: ; 110
+	dq 0x2cca28a2000
+low_o: ; 111
+	dq 0x1c8a289c000
+low_p: ; 112
+	dq 0x2cca2cac820
+low_q: ; 113
+	dq 0x1a9a299a082
+low_r: ; 114
+	dq 0x2cca0820000
+low_s: ; 115
+	dq 0x1c81c0bc000
+low_t: ; 116
+	dq 0x1043c41048c000
+low_u: ; 117
+	dq 0x228a299a000
+low_v: ; 118
+	dq 0x22894508000
+low_w: ; 119
+	dq 0x228aaa94000
+low_x: ; 120
+	dq 0x22508522000
 
