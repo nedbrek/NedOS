@@ -165,8 +165,8 @@ vputc:
 	cmp edx, 10
 	je .next_row
 
-	sub edx, 'e'
-	mov rdx, [rdx*8+low_e]
+	sub edx, 32
+	mov rdx, [rdx*8+space]
 
 .normal:
 	; get upper right of char
@@ -356,7 +356,7 @@ termLR_ctx:
 	dd   0 ; cursor Y (chars)
 
 hi_str:
-	db "hello",10,0
+	db "Hello, world",10,0
 
 cap_h: ; 72
 	dq 0x228A2FA28A2000
