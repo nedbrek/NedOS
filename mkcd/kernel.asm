@@ -82,12 +82,12 @@ acpi_found:
 	call fill_rect
 
 	mov eax, 0xffff_ffff
-	mov rdx, 'h'
+	mov rdx, hi_str
 	mov esi, termLR_ctx
-	call vputc
+	call vputs
 
-	mov rdx, 'e'
-	call vputc
+	mov rdx, hi_str
+	call vputs
 
 	jmp die
 
@@ -238,6 +238,7 @@ vputc:
 	;; next row
 	mov ebx, 0
 
+	mov ecx, [rsi+20]
 	inc ecx
 	cmp ecx, [rsi+12]
 	jb .done
@@ -252,6 +253,28 @@ vputc:
 	pop rbx
 	pop rdi
 	pop rbp
+	ret
+
+vputs:
+	; IN rax - color (high bits bg)
+	; IN rdx - char*
+	; IN esi - context ptr
+
+	xchg bx,bx
+.nextc:
+	push rdx
+	movzx edx, BYTE [rdx]
+	test dl, dl
+	jz .done
+
+	call vputc
+
+	pop rdx
+	inc rdx
+	jmp .nextc
+
+.done:
+	pop rdx
 	ret
 
 fill_rect:
@@ -333,7 +356,7 @@ termLR_ctx:
 	dd   0 ; cursor Y (chars)
 
 hi_str:
-	db "Hello world\n",0
+	db "hello",10,0
 
 cap_h: ; 72
 	dq 0x228A2FA28A2000
