@@ -15,11 +15,11 @@ PAGE_SUPER     equ   4
 
 	;; install pds for 1..2, 2..3 and 3..4 G
 	mov [rsi+PAGE_LEN+1*8], DWORD ((PAGE_BASE + 3*PAGE_LEN) \
-                 	|PAGE_PRESENT|PAGE_WRITE|PAGE_SUPER)
+	              	|PAGE_PRESENT|PAGE_WRITE|PAGE_SUPER)
 	mov [rsi+PAGE_LEN+2*8], DWORD ((PAGE_BASE + 4*PAGE_LEN) \
-                 	|PAGE_PRESENT|PAGE_WRITE|PAGE_SUPER)
+	              	|PAGE_PRESENT|PAGE_WRITE|PAGE_SUPER)
 	mov [rsi+PAGE_LEN+3*8], DWORD ((PAGE_BASE + 5*PAGE_LEN) \
-                 	|PAGE_PRESENT|PAGE_WRITE|PAGE_SUPER)
+	              	|PAGE_PRESENT|PAGE_WRITE|PAGE_SUPER)
 
 	;; flush TLB
 	mov rax, cr3
@@ -91,6 +91,84 @@ acpi_found:
 	; RSDT is at offset 16
 	mov edi, [rdi-8+16]
 
+	xchg bx,bx
+	mov eax, edi
+	mov esi, PAGE_BASE
+	call add_2M_page
+
+	mov ebx, 32
+.next_tbl:
+	add ebx, 4
+	mov esi, [rdi+rbx]
+	cmp DWORD [rsi], 'APIC'
+	jnz .next_tbl
+
+.found_apic:
+	mov ebx, 44
+
+	mov eax, [rsi+rbx]
+	cmp al, 1 ; want IOAPIC
+	je .found_ioapic
+
+	;; add proc apic offset
+	shr eax, 8
+	and eax, 0xff
+	add ebx, eax
+
+	mov eax, [rsi+rbx]
+	cmp al, 1 ; want IOAPIC
+	jne panic
+
+.found_ioapic:
+	mov edi, [rsi+rbx+4]
+	mov [BOOT_PARMS+22], edi ; store to BOB
+
+	mov eax, edi
+	mov esi, PAGE_BASE
+	call add_2M_page
+
+	mov ah, 7
+
+	; print version reg (has num entries)
+	mov DWORD [rdi], 1
+	mov edx, [rdi+16]
+	call printDWord
+	mov al, 0x0a
+	call putc
+
+	shr edx, 16
+	mov ecx, edx
+
+.print_ioredir:
+	dec ecx
+
+	mov edx, ecx
+	call printDWord
+	mov al, 32
+	call putc
+
+	add edx, edx
+	add edx, 16
+	mov ebx, edx
+
+	mov DWORD [rdi], ebx
+	mov edx, [rdi+16]
+	call printDWord
+	mov al, 32
+	call putc
+
+	inc ebx
+	mov DWORD [rdi], ebx
+	mov edx, [rdi+16]
+	call printDWord
+	mov al, 0x0a
+	call putc
+
+	test ecx, ecx
+	jnz .print_ioredir
+
+done_ioapic:
+
 end:
 	inc rax
 	jmp end
@@ -102,6 +180,45 @@ panic:
 	mov eax, 0x0700
 	mov ebx, str_panic
 	call puts
+
+add_2M_page:
+	; IN eax - vaddr to add a page for
+	; IN esi - start of page table (CR3)
+	; OUT esi - addr of pde
+	push rdi
+
+	mov edi, eax
+
+	;;; find top two bits (pd offset)
+	shr eax, 30
+
+	;;; add two for pd offset
+	inc eax ; shift past PML4
+	inc eax ; shift past pdp
+
+	;;; multiply by PAGE_LEN
+	shl eax, 12
+
+	add esi, eax ; done pd offset
+
+	;;; get pde (bits 29..21)
+	mov eax, edi
+	shr eax, 21
+	and eax, 0x1ff
+
+	shl eax, 3 ; scale for pde size
+
+	add esi, eax ; add pde offset
+
+	;;; build pde
+	mov eax, edi
+	and eax, 0xffe0_0000
+	or  eax, 0x80|PAGE_PRESENT|PAGE_WRITE|PAGE_SUPER
+	mov [rsi], eax
+
+	mov eax, edi
+	pop rdi
+	ret
 
 putc:
 	;  IN - AL char to print
