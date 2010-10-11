@@ -169,6 +169,52 @@ acpi_found:
 
 done_ioapic:
 
+	; scan the pci bus for devices
+scan_pci:
+	xchg bx,bx
+	mov ebx, 0x8000_0000 ; bus 0, dev 0, fun 0, reg 0
+
+.top:
+	mov eax, ebx
+	mov dx, 0xcf8
+	out dx, eax
+	or  dl, 4
+	in  eax, dx
+	cmp ax, -1 ; no device present
+	je .done_dev
+
+	;; read class + prog_if
+	mov eax, ebx
+	or  eax, 8
+	xor dl, 4
+	out dx, eax
+	or  dl, 4
+	in  eax, dx
+
+	mov ecx, eax
+	mov edx, ebx
+	mov ah, 7
+	call printDWord
+
+	mov al, 32
+	call putc
+
+	mov edx, ecx
+	call printDWord
+
+	mov al, 10
+	call putc
+
+.done_dev:
+	add ebx, 0x100
+
+.next:
+	cmp ebx, 0x8100_0000
+	jae .done_pci
+	jmp .top
+
+.done_pci:
+
 end:
 	inc rax
 	jmp end
