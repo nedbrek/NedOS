@@ -184,24 +184,68 @@ scan_pci:
 	je .done_dev
 
 	;; read class + prog_if
-	mov eax, ebx
-	or  eax, 8
-	xor dl, 4
-	out dx, eax
-	or  dl, 4
-	in  eax, dx
-
-	mov ecx, eax
 	mov edx, ebx
+	or  dl, 8
 	mov ah, 7
 	call printDWord
 
 	mov al, 32
 	call putc
 
-	mov edx, ecx
-	call printDWord
+	call print_pci_dword
 
+	;; check for IDE device
+	shr edx, 16
+	cmp dx, 0x0101
+	jne .done_print
+
+	;; print int info
+	mov al, 32
+	call putc
+
+	;; poke the drive interrupt
+	mov eax, ebx
+	or  al, 0x3c
+	mov edx, 0xcf8
+	out dx, eax
+	or  dl, 4
+	mov al, 0xfe
+	out dx, al
+
+	mov edx, ebx
+	or  dl, 0x3c
+	mov ah, 7
+	call print_pci_dword
+
+	mov al, 32
+	call putc
+
+	mov edx, ebx
+	or  edx, 0x10
+	call print_pci_dword
+
+	mov al, 32
+	call putc
+
+	mov edx, ebx
+	or  edx, 0x14
+	call print_pci_dword
+
+	mov al, 32
+	call putc
+
+	mov edx, ebx
+	or  edx, 0x18
+	call print_pci_dword
+
+	mov al, 32
+	call putc
+
+	mov edx, ebx
+	or  edx, 0x20
+	call print_pci_dword
+
+.done_print:
 	mov al, 10
 	call putc
 
@@ -226,6 +270,21 @@ panic:
 	mov eax, 0x0700
 	mov ebx, str_panic
 	call puts
+
+print_pci_dword:
+	; IN edx - pci ref
+	; OUT eax - {7, low nibble}
+	; OUT edx - reg value
+	mov eax, edx
+	mov edx, 0xcf8
+	out dx, eax
+	or  dx, 4
+	in  eax, dx
+	mov edx, eax
+	mov ah, 7
+	call printDWord
+
+	ret
 
 add_2M_page:
 	; IN eax - vaddr to add a page for
