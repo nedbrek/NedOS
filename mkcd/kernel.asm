@@ -74,6 +74,7 @@ acpi_found:
 	mov  rax, 0x0000_FF00_0000_00FF
 	call fill_screen
 
+	; clear a terminal box
 	xor eax, eax    ; pixel color
 	mov ecx, 80*6   ; rect width (80 chars in px)
 	mov edi, 50*10*4; y coord (50 chars in bytes)
@@ -81,11 +82,13 @@ acpi_found:
 	mov ebx, 25*10  ; height, 25 chars
 	call fill_rect
 
+	; printf Hello world (in white)
 	mov eax, 0xffff_ffff
 	mov rdx, hi_str
 	mov esi, termLR_ctx
 	call vputs
 
+	; again
 	mov rdx, hi_str
 	call vputs
 
