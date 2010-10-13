@@ -88,9 +88,14 @@ acpi_found:
 	mov esi, termLR_ctx
 	call vputs
 
-	; again
+	; again (test newline code)
 	mov rdx, hi_str
 	call vputs
+
+	; disable pic
+	mov al, 0xff
+	out 0xa1, al
+	out 0x21, al
 
 	jmp die
 
