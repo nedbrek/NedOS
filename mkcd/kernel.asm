@@ -68,6 +68,61 @@ acpi_found:
 	mov esi, PAGE_BASE
 	call add_2M_page
 
+	; find IOAPIC
+	mov ebx, 32
+
+.next_tbl:
+	add ebx, 4
+	mov esi, [rdi+rbx]
+	cmp DWORD [rsi], 'APIC'
+	jnz .next_tbl
+
+.found_apic:
+	mov ebx, 44
+
+	mov eax, [rsi+rbx]
+	cmp al, 1 ; want IOAPIC
+	je .found_ioapic
+
+	;; add proc apic offset
+	shr eax, 8
+	and eax, 0xff
+	add ebx, eax
+
+	mov eax, [rsi+rbx]
+	cmp al, 1 ; still looking for IOAPIC
+	jne panic
+
+.found_ioapic:
+	mov edi, [rsi+rbx+4]
+
+	;; map it in
+	mov eax, edi
+	mov esi, PAGE_BASE
+	call add_2M_page
+
+	mov ecx, 16 ; fill the 16 legacy INT redirects
+
+.next_ioredir:
+	dec ecx
+
+	;; access reg[ecx*2+16]
+	mov eax, ecx
+	add eax, eax
+	add eax, 16
+	mov DWORD [rdi], eax
+
+	mov edx, ecx
+	or  edx, 0x0000_89f0
+	mov DWORD [rdi+16], edx
+
+	inc eax
+	mov DWORD [rdi], eax
+	mov DWORD [rdi+16], 0x0100_0000
+
+	test ecx, ecx
+	jnz .next_ioredir
+
 	; draw a character
 
 	; success, aqua screen of life
