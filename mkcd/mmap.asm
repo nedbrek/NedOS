@@ -14,6 +14,7 @@
 
 BOOT_PARMS     equ   0x40000 ; information from boot time
 GDT_BASE       equ   0x50000
+IDT_BASE       equ   GDT_BASE+0x1000
 PAGE_BASE      equ   0x60000
 MMAP_BASE      equ   0x70000
 
