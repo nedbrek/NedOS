@@ -1,5 +1,5 @@
 .PHONY: all clean run
-CPPFLAGS = -Wall
+CPPFLAGS = -Wall -g
 
 all: cddump.exe mkcd.exe
 
@@ -12,7 +12,7 @@ all: cddump.exe mkcd.exe
 cddump.exe: eltorito.o iso9660.o cddump.o
 	@g++ -Wall -o$@ $^
 
-mkcd.exe: eltorito.o iso9660.o mkcd.cpp
+mkcd.exe: eltorito.o iso9660.o mkcd.o
 	@g++ -Wall -o$@ $^
 
 clean:
@@ -32,5 +32,6 @@ os.bin: boot kernel
 	@cat boot kernel > os.bin
 
 run: mkcd.exe os.bin
-	@./mkcd.exe os.bin
+	@genisoimage -o test.iso -b os.bin -no-emul-boot -m test.iso .
+#	@./mkcd.exe os.bin
 
