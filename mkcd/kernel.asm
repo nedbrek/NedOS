@@ -101,7 +101,8 @@ acpi_found:
 	mov esi, PAGE_BASE
 	call add_2M_page
 
-	mov ecx, 16 ; fill the 16 legacy INT redirects
+	; fill the 16 legacy INT redirects
+	mov ecx, 16
 
 .next_ioredir:
 	dec ecx
@@ -122,6 +123,110 @@ acpi_found:
 
 	test ecx, ecx
 	jnz .next_ioredir
+
+	; disable pic
+	mov al, 0xff
+	out 0xa1, al
+	out 0x21, al
+
+	xchg bx,bx
+	; fill IDT
+	;; skip entries 00..EF (for now)
+	mov edi, IDT_BASE+0xF0*16
+
+	mov edx, isr_dev_nop
+
+	;; mov high offset to second dword
+	mov eax, edx
+	mov  ax, 0x8e01
+
+	shl rax, 32
+
+	and edx, 0xffff
+	or  rax, rdx ; grab low offset
+	bts rax, 16  ; set code seg
+
+	xor ecx, ecx
+
+	;; irq0
+	mov [rdi+rcx*8], rax
+	inc ecx
+	inc ecx
+
+	;; irq1
+	mov [rdi+rcx*8], rax
+	inc ecx
+	inc ecx
+
+	;; irq2
+	mov [rdi+rcx*8], rax
+	inc ecx
+	inc ecx
+
+	;; irq3
+	mov [rdi+rcx*8], rax
+	inc ecx
+	inc ecx
+
+	;; irq4
+	mov [rdi+rcx*8], rax
+	inc ecx
+	inc ecx
+
+	;; irq5
+	mov [rdi+rcx*8], rax
+	inc ecx
+	inc ecx
+
+	;; irq6
+	mov [rdi+rcx*8], rax
+	inc ecx
+	inc ecx
+
+	;; irq7
+	mov [rdi+rcx*8], rax
+	inc ecx
+	inc ecx
+
+	;; irq8
+	mov [rdi+rcx*8], rax
+	inc ecx
+	inc ecx
+
+	;; irq9
+	mov [rdi+rcx*8], rax
+	inc ecx
+	inc ecx
+
+	;; irq10
+	mov [rdi+rcx*8], rax
+	inc ecx
+	inc ecx
+
+	;; irq11
+	mov [rdi+rcx*8], rax
+	inc ecx
+	inc ecx
+
+	;; irq12
+	mov [rdi+rcx*8], rax
+	inc ecx
+	inc ecx
+
+	;; irq13
+	mov [rdi+rcx*8], rax
+	inc ecx
+	inc ecx
+
+	;; irq14
+	mov [rdi+rcx*8], rax
+	inc ecx
+	inc ecx
+
+	;; irq15
+	mov [rdi+rcx*8], rax
+	inc ecx
+	inc ecx
 
 	; draw a character
 
@@ -147,12 +252,12 @@ acpi_found:
 	mov rdx, hi_str
 	call vputs
 
-	; disable pic
-	mov al, 0xff
-	out 0xa1, al
-	out 0x21, al
-
 	jmp die
+
+isr_dev_nop:
+	; empty interrupt handler for devices
+	mov DWORD [0xfee0_00b0], 0 ; write EOI
+	iret
 
 add_2M_page:
 	; IN eax - vaddr to add a page for
