@@ -8,3 +8,17 @@ osinfo - a CD image which just dumps configuration information
 
 Of possible use to other people is my bootloader: one sector (512B), sets
 the video mode, and readies the kernel for 64 bit mode.
+
+The best source I've found for OS development is:
+http://wiki.osdev.org/Main_Page
+
+I use Bochs for testing the os image (see the OSDev Bochs page).
+
+To build:
+cd mkcd
+make run
+cp test.iso <bochs area>
+
+I use Bochs magic instructions (xchg bx,bx) for debugging.  You should use them
+too.  You will need to continue several times to reach the end (jmp end).
+
