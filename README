@@ -1,0 +1,10 @@
+NedOS - My hobby operating system
+   Primarily a workbench for exploring how the PC platform works
+
+mkcd   - build into a CD ISO image (latest development)
+mkflop - build into a FAT12 floppy image (first development)
+mkhd   - build into a hard drive image (side development)
+osinfo - a CD image which just dumps configuration information
+
+Of possible use to other people is my bootloader: one sector (512B), sets
+the video mode, and readies the kernel for 64 bit mode.
