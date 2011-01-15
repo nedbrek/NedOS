@@ -1,5 +1,8 @@
+*.o
 Depend.Make
 DependAsm.Make
 boot
+cddump.exe
 kernel
+mkcd.exe
 os.bin
