@@ -228,6 +228,8 @@ acpi_found:
 	inc ecx
 	inc ecx
 
+	lidt [idt]
+
 	; draw a character
 
 	; success, aqua screen of life
@@ -253,6 +255,10 @@ acpi_found:
 	call vputs
 
 	jmp die
+
+idt:
+	dw 4095
+	dq IDT_BASE
 
 isr_dev_nop:
 	; empty interrupt handler for devices
