@@ -32,6 +32,6 @@ os.bin: boot kernel
 	@cat boot kernel > os.bin
 
 run: mkcd.exe os.bin
-	@genisoimage -o test.iso -b os.bin -no-emul-boot -m test.iso .
+	@genisoimage -quiet -o test.iso -b os.bin -no-emul-boot -m test.iso .
 #	@./mkcd.exe os.bin
 
