@@ -88,7 +88,7 @@ codePE:
 	jmp 8:0x7e00
 
 gdt:
-	dw 32
+	dw 1024
 	dd GDT_BASE
 
 	times 512-($-$$) db 0
