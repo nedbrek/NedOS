@@ -6,20 +6,22 @@ PAGE_SUPER     equ   4
 
 PAGE_LEN       equ   0x01000
 
-	; GDT/IDT (64KB at GDT_BASE)
-	mov ax, (GDT_BASE >> 4)
+	; TSS/GDT/IDT (64KB at TSS_BASE)
+	mov ax, (TSS_BASE >> 4)
 	mov ds, ax ; space saver
 	call fun_kzero
 
+	xchg bx,bx ; Bochs magic debug break 
+
 	; entry0 - null segment
 	; entry1 - code segment
-	;     [0x08] base = 0
-	mov   [0x0c], WORD 0x9800
-	mov   [0x0e], BYTE 0xf
+	;     [(GDT_BASE & 0xffff)+0x08] base = 0
+	mov   [(GDT_BASE & 0xffff)+0x0c], WORD 0x9800
+	mov   [(GDT_BASE & 0xffff)+0x0e], BYTE 0xf
 	; entry2 - data segment
-	;     [0x10] base = 0
-	mov   [0x14], WORD 0x9300
-	mov   [0x16], BYTE 0xf
+	;     [(GDT_BASE & 0xffff)+0x10] base = 0
+	mov   [(GDT_BASE & 0xffff)+0x14], WORD 0x9300
+	mov   [(GDT_BASE & 0xffff)+0x16], BYTE 0xf
 
 	; leave space for IDT
 
@@ -51,8 +53,6 @@ PAGE_LEN       equ   0x01000
 	mov   cr4, eax
 
 	lgdt  [gdt]
-
-	xchg bx,bx ; Bochs magic debug break 
 
 	; enter protected mode (no paging)
 	cli
