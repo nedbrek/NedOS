@@ -134,6 +134,7 @@ acpi_found:
 	;; skip entries 00..EF (for now)
 	mov edi, IDT_BASE+0xF0*16
 
+	xchg bx,bx
 	mov edx, isr_dev_nop
 
 	;; mov high offset to second dword
@@ -230,6 +231,48 @@ acpi_found:
 
 	lidt [idt]
 
+	; build TSS
+	;; descriptor
+	mov edi, GDT_BASE
+
+	;;; first put in user segments
+	;;;; user code (64 bit)
+	mov [rdi+0x1c], DWORD 0x00e0_f900
+	;;;; user data
+	mov [rdi+0x24], DWORD 0x00c0_f300
+
+	;;; TSS descriptor (limit 104, base[15:0] in high word
+	mov [rdi+0x28], DWORD 0x68|((TSS_BASE&0xffff)<<16)
+	;;; (type, base[23:16] in low word, TSS restricted to 16M)
+	mov [rdi+0x2c], DWORD 0x8900|((TSS_BASE&0xff0000) >> 16)
+
+	;; fill in TSS data
+	mov edi, TSS_BASE
+
+	;;; stack pointers for rings 0,1,2 (set to low reclaim (0x500) for now)
+	mov [rdi+ 5], BYTE 0x5
+	mov [rdi+13], BYTE 0x5
+	mov [rdi+21], BYTE 0x5
+
+	;;; stack pointers 1..7 for interrupts (use area just below BOB)
+	mov [rdi+36], DWORD BOOT_PARMS
+	mov [rdi+44], DWORD BOOT_PARMS
+	mov [rdi+52], DWORD BOOT_PARMS
+	mov [rdi+60], DWORD BOOT_PARMS
+	mov [rdi+68], DWORD BOOT_PARMS
+	mov [rdi+76], DWORD BOOT_PARMS
+	mov [rdi+84], DWORD BOOT_PARMS
+
+	mov ax, 0x28
+	ltr ax
+
+	; add a pte for the EOI
+	mov eax, 0xfee0_0000
+	mov esi, PAGE_BASE
+	call add_2M_page
+
+	sti
+
 	; draw a character
 
 	; success, aqua screen of life
@@ -262,6 +305,7 @@ idt:
 
 isr_dev_nop:
 	; empty interrupt handler for devices
+	inc r9
 	mov DWORD [0xfee0_00b0], 0 ; write EOI
 	iret
 
