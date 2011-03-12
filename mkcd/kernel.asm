@@ -16,11 +16,11 @@ PAGE_LEN       equ   0x01000
 
 	;; install pds for 1..2, 2..3 and 3..4 G
 	mov [rsi+PAGE_LEN+1*8], DWORD ((PAGE_BASE + 3*PAGE_LEN) \
-                    |PAGE_PRESENT|PAGE_WRITE|PAGE_SUPER)
+	                 |PAGE_PRESENT|PAGE_WRITE|PAGE_SUPER)
 	mov [rsi+PAGE_LEN+2*8], DWORD ((PAGE_BASE + 4*PAGE_LEN) \
-                    |PAGE_PRESENT|PAGE_WRITE|PAGE_SUPER)
+	                 |PAGE_PRESENT|PAGE_WRITE|PAGE_SUPER)
 	mov [rsi+PAGE_LEN+3*8], DWORD ((PAGE_BASE + 5*PAGE_LEN) \
-                    |PAGE_PRESENT|PAGE_WRITE|PAGE_SUPER)
+	                 |PAGE_PRESENT|PAGE_WRITE|PAGE_SUPER)
 
 	;; install VRAM pages
 	;;; get the video mem base
@@ -280,7 +280,7 @@ acpi_found:
 
 	; printf Hello world (in white)
 	mov eax, 0xffff_ffff
-	mov rdx, hi_str
+	mov rdx, long_str
 	mov esi, termLR_ctx
 	call vputs
 
@@ -510,9 +510,10 @@ vputc:
 	ret
 
 vputs:
-	; IN rax - color (high bits bg)
-	; IN rdx - char*
-	; IN esi - context ptr
+	; IN  rax - color (high bits will be bg, not implemented)
+	; IN  rdx - char*
+	; IN  esi - context ptr
+	; OUT rdx - end of string
 
 	xchg bx,bx
 .nextc:
@@ -634,7 +635,7 @@ die:
 termLR_ctx:
 	dd 480 ; console x pos (px)
 	dd 500 ; console y pos (px)
-	dd  50 ; width (chars)
+	dd  80 ; width (chars)
 	dd  25 ; height (chars)
 	dd   0 ; cursor X (chars)
 	dd   0 ; cursor Y (chars)
@@ -642,8 +643,11 @@ termLR_ctx:
 hi_str:
 	db "Hello, world",10,0
 
-cap_h: ; 72
-	dq 0x228A2FA28A2000
+long_str:
+	db "A very, very, very long string.  To test console wrapping, you know."
+	db "  Wrapping is a very important function."
+	db 10
+	db  0
 
 %include "font.asm"
 
