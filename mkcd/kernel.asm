@@ -267,15 +267,9 @@ acpi_found:
 	mov esi, PAGE_BASE
 	call add_2M_page
 
-	; flush TLB
-	mov rax, cr3
-	mov cr3, rax
-
 	xchg bx,bx
 	; enable APIC
 	mov edi, 0xfee0_00f0
-	mov eax, DWORD [rdi] ; read  SVR
-	or  eax, 0x100
 	mov DWORD [rdi], 0x100 ; write SVR
 
 	sti
