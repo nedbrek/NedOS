@@ -1,4 +1,5 @@
 %include "mmap.asm"
+%include "bob.asm"
 
 PAGE_PRESENT   equ   1
 PAGE_WRITE     equ   2
@@ -130,19 +131,19 @@ acpi_found:
 	;; skip entries 00..EF (for now)
 	mov edi, IDT_BASE+0xF0*16
 
-	xchg bx,bx
-	mov edx, isr_dev_nop
-
-	xor ecx, ecx
 	;; irq0
+	mov edx, isr_dev_nop
+	xor ecx, ecx
 	call write_isr_to_idt
 
 	;; irq1
+	mov edx, isr_mouse_keyb
 	inc ecx
 	inc ecx
 	call write_isr_to_idt
 
 	;; irq2
+	mov edx, isr_dev_nop
 	inc ecx
 	inc ecx
 	call write_isr_to_idt
@@ -193,11 +194,13 @@ acpi_found:
 	call write_isr_to_idt
 
 	;; irq12
+	mov edx, isr_mouse_keyb
 	inc ecx
 	inc ecx
 	call write_isr_to_idt
 
 	;; irq13
+	mov edx, isr_dev_nop
 	inc ecx
 	inc ecx
 	call write_isr_to_idt
@@ -297,6 +300,48 @@ isr_dev_nop:
 	push rax
 	mov rax, 0xfee0_00b0
 	mov DWORD [rax], 0 ; write EOI
+	pop rax
+	iretq
+
+isr_mouse_keyb:
+	; interrupt handler for mouse and keyboard
+	push rax
+
+	; get the status and data bytes
+	xor eax, eax
+
+	; status, bit 0 tells ready
+	in   al, 0x64
+	test al, 1
+	jz   .end ; not ready, spurious int
+
+	; insert at end of input queue
+	;; check for overflow
+	push rdi
+
+	;;; if slot occupied
+	mov  edi, [BOOT_PARMS+QUEUE_END]
+	test BYTE [rdi*2+BOOT_PARMS+INPUT_QUEUE+1], 1
+	jnz  panic
+
+	;; get the next byte
+	mov  ah, al
+	in   al, 0x60
+
+	;; do the write
+	mov [rdi*2+BOOT_PARMS+INPUT_QUEUE], ax
+
+	;; update the end of queue pointer
+	inc edi
+	and edi, 0xfff
+	mov [BOOT_PARMS+QUEUE_END], edi
+
+	pop rdi
+
+.end:
+	mov rax, 0xfee0_00b0
+	mov DWORD [rax], 0 ; write EOI
+
 	pop rax
 	iretq
 
