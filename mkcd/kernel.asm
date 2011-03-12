@@ -26,7 +26,7 @@ PAGE_LEN       equ   0x01000
 	mov  eax, [BOOT_PARMS+0x10]
 	;Ned set WC
 	call add_2M_page
-	;;; leaves rsi pointing to the pde
+	;;; leaves eax pointing to the pde
 
 	;;; need two for 4 MB VRAM
 	add eax, 0x20_0000 |0x80|PAGE_PRESENT|PAGE_WRITE|PAGE_SUPER
@@ -114,12 +114,8 @@ acpi_found:
 	mov DWORD [rdi], eax
 
 	mov edx, ecx
-	or  edx, 0x0000_89f0
+	or  edx, 0x0000_a0f0
 	mov DWORD [rdi+16], edx
-
-	inc eax
-	mov DWORD [rdi], eax
-	mov DWORD [rdi+16], 0x0100_0000
 
 	test ecx, ecx
 	jnz .next_ioredir
@@ -145,7 +141,7 @@ acpi_found:
 
 	and edx, 0xffff
 	or  rax, rdx ; grab low offset
-	bts rax, 16  ; set code seg
+	bts rax, 19  ; set code seg
 
 	xor ecx, ecx
 
@@ -271,6 +267,17 @@ acpi_found:
 	mov esi, PAGE_BASE
 	call add_2M_page
 
+	; flush TLB
+	mov rax, cr3
+	mov cr3, rax
+
+	xchg bx,bx
+	; enable APIC
+	mov edi, 0xfee0_00f0
+	mov eax, DWORD [rdi] ; read  SVR
+	or  eax, 0x100
+	mov DWORD [rdi], 0x100 ; write SVR
+
 	sti
 
 	; draw a character
@@ -306,13 +313,17 @@ idt:
 isr_dev_nop:
 	; empty interrupt handler for devices
 	inc r9
-	mov DWORD [0xfee0_00b0], 0 ; write EOI
+	push rax
+	mov rax, 0xfee0_00b0
+	mov DWORD [rax], 0 ; write EOI
+	pop rax
+	db 0x48
 	iret
 
 add_2M_page:
 	; IN eax - vaddr to add a page for
 	; IN esi - start of page table (CR3)
-	; OUT esi - addr of pde
+	; OUT eax - addr of pde
 	xchg bx, bx
 	push rdi
 
