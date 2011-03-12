@@ -133,97 +133,84 @@ acpi_found:
 	xchg bx,bx
 	mov edx, isr_dev_nop
 
-	;; mov high offset to second dword
-	mov eax, edx
-	mov  ax, 0x8e01
-
-	shl rax, 32
-
-	and edx, 0xffff
-	or  rax, rdx ; grab low offset
-	bts rax, 19  ; set code seg
-
 	xor ecx, ecx
-
 	;; irq0
-	mov [rdi+rcx*8], rax
-	inc ecx
-	inc ecx
+	call write_isr_to_idt
 
 	;; irq1
-	mov [rdi+rcx*8], rax
 	inc ecx
 	inc ecx
+	call write_isr_to_idt
 
 	;; irq2
-	mov [rdi+rcx*8], rax
 	inc ecx
 	inc ecx
+	call write_isr_to_idt
 
 	;; irq3
-	mov [rdi+rcx*8], rax
 	inc ecx
 	inc ecx
+	call write_isr_to_idt
 
 	;; irq4
-	mov [rdi+rcx*8], rax
 	inc ecx
 	inc ecx
+	call write_isr_to_idt
 
 	;; irq5
-	mov [rdi+rcx*8], rax
 	inc ecx
 	inc ecx
+	call write_isr_to_idt
 
 	;; irq6
-	mov [rdi+rcx*8], rax
 	inc ecx
 	inc ecx
+	call write_isr_to_idt
 
 	;; irq7
-	mov [rdi+rcx*8], rax
 	inc ecx
 	inc ecx
+	call write_isr_to_idt
 
 	;; irq8
-	mov [rdi+rcx*8], rax
 	inc ecx
 	inc ecx
+	call write_isr_to_idt
 
 	;; irq9
-	mov [rdi+rcx*8], rax
 	inc ecx
 	inc ecx
+	call write_isr_to_idt
 
 	;; irq10
-	mov [rdi+rcx*8], rax
 	inc ecx
 	inc ecx
+	call write_isr_to_idt
 
 	;; irq11
-	mov [rdi+rcx*8], rax
 	inc ecx
 	inc ecx
+	call write_isr_to_idt
 
 	;; irq12
-	mov [rdi+rcx*8], rax
 	inc ecx
 	inc ecx
+	call write_isr_to_idt
 
 	;; irq13
-	mov [rdi+rcx*8], rax
 	inc ecx
 	inc ecx
+	call write_isr_to_idt
 
 	;; irq14
-	mov [rdi+rcx*8], rax
 	inc ecx
 	inc ecx
+	call write_isr_to_idt
 
 	;; irq15
-	mov [rdi+rcx*8], rax
 	inc ecx
 	inc ecx
+	call write_isr_to_idt
 
 	lidt [idt]
 
@@ -556,6 +543,36 @@ fill_screen:
 	;; write
 	mov  edi, [BOOT_PARMS+0x10]
 	rep stosq
+	ret
+
+write_isr_to_idt:
+	; IN  edx - address of isr
+	; IN  rdi - address of idt
+	; IN  ecx - vector number * 2
+	; OUT eax - IDT value
+	push rdx
+
+	mov eax, edx
+
+	; save low bits of &isr
+	and edx, 0xffff
+	bts edx, 19 ; set for code segment 8 (entry 1 in GDT)
+
+	; build a 64 bit IDT entry
+	;; bits [31:16] are the high bits of &isr
+	;; bits [16:00] are the properties
+	mov  ax, 0x8e01 ; present, ring 0, INT, IST=1
+
+	;; move bits [31:0] up to [63:32]
+	shl rax, 32
+
+	;; bring in low bits
+	or  rax, rdx
+
+	; write the IDT
+	mov [rdi+rcx*8], rax
+
+	pop  rdx
 	ret
 
 panic:
