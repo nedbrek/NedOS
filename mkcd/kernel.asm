@@ -298,8 +298,7 @@ isr_dev_nop:
 	mov rax, 0xfee0_00b0
 	mov DWORD [rax], 0 ; write EOI
 	pop rax
-	db 0x48
-	iret
+	iretq
 
 add_2M_page:
 	; IN eax - vaddr to add a page for
