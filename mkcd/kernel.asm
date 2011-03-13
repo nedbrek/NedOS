@@ -288,7 +288,34 @@ acpi_found:
 	mov rdx, hi_str
 	call vputs
 
-	jmp die
+	xor edx, edx
+check_keyboard:
+	mov edi, [BOOT_PARMS+QUEUE_START]
+
+.wait:
+	test BYTE [rdi*2+BOOT_PARMS+INPUT_QUEUE+1], 1
+	jz .wait
+
+	mov  al, [rdi*2+BOOT_PARMS+INPUT_QUEUE]
+	test al, 0x80
+	jnz  .consume ; skip break codes
+
+	mov dl, al
+	mov eax, 0xffff_ffff
+	call vputByte
+
+	mov dl, ' '
+	call vputc
+
+.consume:
+	; clear the buffer
+	mov  WORD [rdi*2+BOOT_PARMS+INPUT_QUEUE], 0
+
+	; move along
+	inc rdi
+	mov [BOOT_PARMS+QUEUE_START], edi
+
+	jmp check_keyboard
 
 idt:
 	dw 4095
@@ -481,7 +508,7 @@ vputc:
 	mov ebx, [rsi+16]
 	mov ecx, [rsi+20]
 
-	xchg bx,bx
+	;xchg bx,bx ; for testing wrap logic
 	;; next col
 	inc ebx
 	;; check for wrap
@@ -507,6 +534,40 @@ vputc:
 	pop rbx
 	pop rdi
 	pop rbp
+	ret
+
+vputNibble:
+	; IN  rax - color
+	; IN  dl  - value 0-15
+	; IN  esi - context ptr
+	; OUT dl  - ASCII value of dl
+	cmp dl, 9
+	jbe .printLo
+
+	add dl, 'A'-10
+	jmp .done
+
+.printLo:
+	add dl, '0'
+
+.done:
+	call vputc
+	ret
+
+vputByte:
+	; IN  rax - color
+	; IN  dl  - byte
+	; IN  esi - context ptr
+	; OUT dl  - ASCII value of low nibble
+	push rdx
+
+	shr dl, 4
+	call vputNibble
+
+	pop  rdx
+	and dl, 0xf
+	call vputNibble
+
 	ret
 
 vputs:
