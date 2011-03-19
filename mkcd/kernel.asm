@@ -126,6 +126,10 @@ acpi_found:
 	out 0xa1, al
 	out 0x21, al
 
+	; disable pit
+	mov al, 0x10
+	out 0x43, al
+
 	xchg bx,bx
 	; fill IDT
 	;; skip entries 00..EF (for now)
