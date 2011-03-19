@@ -1,6 +1,7 @@
 #include "eltorito.h"
 #include <cstdio>
 #include <string>
+#include <cstring>
 
 int main(int argc, char **argv)
 {
