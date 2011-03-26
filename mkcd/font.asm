@@ -1,5 +1,5 @@
 space: ; 32
-	dq 0
+	dq 0x0
 exclam: ; 33
 	dq 0x8208208008000
 quotedbl: ; 34
