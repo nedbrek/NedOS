@@ -275,17 +275,30 @@ acpi_found:
 	call fill_screen
 
 	; clear a terminal box
+	mov esi, termLR_ctx
+
+	;; x coord (px to bytes)
+	mov edx, [rsi] ; x position in px
+	shl edx, 2  ; px -> 4 bytes / px
+
+	;; y coord (px to bytes)
+	mov edi, [rsi+4] ; y position in px
+	shl edi, 2 ; 4 bytes / px
+
+	;; rect width (chars to px)
+	mov ecx, [rsi+8] ; width in chars
+	imul ecx, 6 ; 6 px per char
+
+	;; height, (chars to px)
+	mov ebx, [rsi+12] ; height in chars
+	imul ebx, 10 ; 10 px per char
+
 	xor eax, eax    ; pixel color
-	mov ecx, 80*6   ; rect width (80 chars in px)
-	mov edi, 50*10*4; y coord (50 chars in bytes)
-	mov edx, 80*6*4 ; x coord (80 chars in bytes)
-	mov ebx, 25*10  ; height, 25 chars
 	call fill_rect
 
 	; printf Hello world (in white)
 	mov eax, 0xffff_ffff
 	mov rdx, long_str
-	mov esi, termLR_ctx
 	call vputs
 
 	; again (test newline code)
@@ -603,6 +616,8 @@ fill_rect:
 	; IN edi - y coord (bytes)
 	; IN edx - x coord (bytes, ie. col*4)
 	; IN ebx - height
+	; OUT ebx - zero
+	; OUT edi - end of filled block in LFB
 	xchg bx,bx
 
 	push rsi
