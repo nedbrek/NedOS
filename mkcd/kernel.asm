@@ -293,23 +293,69 @@ acpi_found:
 	mov rdx, hi_str
 	call vputs
 
-	xor edx, edx
 check_keyboard:
+	xor ebx, ebx ; escape flag
 	mov edi, [BOOT_PARMS+QUEUE_START]
 
 .wait:
 	test BYTE [rdi*2+BOOT_PARMS+INPUT_QUEUE+1], 1
 	jz .wait
 
+	; get the code
+	xor eax, eax
 	mov  al, [rdi*2+BOOT_PARMS+INPUT_QUEUE]
+
+	cmp  al, 0xe0 ; escape code
+	jz .escape_start
+
 	test al, 0x80
 	jnz  .consume ; skip break codes
 
-	mov dl, al
-	mov eax, 0xffff_ffff
-	call vputByte
+	; if escape code
+	cmp  bl, 1
+	jae  .escape_code ; handle it
 
-	mov dl, ' '
+	jmp .print ; else, just print
+
+.escape_start:
+	inc ebx ; set escape flag
+
+	; (duplicated from consume)
+	; clear the buffer
+	mov  WORD [rdi*2+BOOT_PARMS+INPUT_QUEUE], 0
+
+	; move along
+	inc edi
+	and edi, 0xfff
+	mov [BOOT_PARMS+QUEUE_START], edi
+	jmp .wait ; fetch next code
+
+.escape_code:
+	; check for funky codes
+	cmp al, 0x2a ; fake LShift
+	jz .consume
+
+	cmp al, 0x36 ; fake RShift
+	jz .consume
+
+	cmp al, 0x37 ; Ctrl+PrintScreen
+	jz .consume
+
+	cmp al, 0x46 ; Ctrl+Break
+	jz .consume
+
+.print:
+	xor edx, edx
+	mov dl, [keymap+rax] ; map from scan code to ASCII
+
+	cmp dl, 10 ; check for new line
+	jz .actual_print
+
+	cmp dl, 32 ; check for unprintable
+	jb .consume
+
+.actual_print:
+	mov eax, 0xffff_ffff
 	call vputc
 
 .consume:
@@ -745,6 +791,9 @@ long_str:
 	db "  Wrapping is a very important function."
 	db 10
 	db  0
+
+keymap:
+%include "keymap.asm"
 
 %include "font.asm"
 
