@@ -305,11 +305,19 @@ check_keyboard:
 	xor eax, eax
 	mov  al, [rdi*2+BOOT_PARMS+INPUT_QUEUE]
 
+	; clear the buffer
+	mov  WORD [rdi*2+BOOT_PARMS+INPUT_QUEUE], 0
+
+	; move along
+	inc edi
+	and edi, 0xfff
+	mov [BOOT_PARMS+QUEUE_START], edi
+
 	cmp  al, 0xe0 ; escape code
 	jz .escape_start
 
 	test al, 0x80
-	jnz  .consume ; skip break codes
+	jnz  check_keyboard ; skip break codes
 
 	; if escape code
 	cmp  bl, 1
@@ -320,29 +328,21 @@ check_keyboard:
 .escape_start:
 	inc ebx ; set escape flag
 
-	; (duplicated from consume)
-	; clear the buffer
-	mov  WORD [rdi*2+BOOT_PARMS+INPUT_QUEUE], 0
-
-	; move along
-	inc edi
-	and edi, 0xfff
-	mov [BOOT_PARMS+QUEUE_START], edi
 	jmp .wait ; fetch next code
 
 .escape_code:
 	; check for funky codes
 	cmp al, 0x2a ; fake LShift
-	jz .consume
+	jz check_keyboard
 
 	cmp al, 0x36 ; fake RShift
-	jz .consume
+	jz check_keyboard
 
 	cmp al, 0x37 ; Ctrl+PrintScreen
-	jz .consume
+	jz check_keyboard
 
 	cmp al, 0x46 ; Ctrl+Break
-	jz .consume
+	jz check_keyboard
 
 .print:
 	xor edx, edx
@@ -352,22 +352,14 @@ check_keyboard:
 	jz .actual_print
 
 	cmp dl, 32 ; check for unprintable
-	jb .consume
+	jb check_keyboard
 
 .actual_print:
 	mov eax, 0xffff_ffff
 	call vputc
 
-.consume:
-	; clear the buffer
-	mov  WORD [rdi*2+BOOT_PARMS+INPUT_QUEUE], 0
-
-	; move along
-	inc edi
-	and edi, 0xfff
-	mov [BOOT_PARMS+QUEUE_START], edi
-
 	jmp check_keyboard
+	; end
 
 idt:
 	dw 4095
