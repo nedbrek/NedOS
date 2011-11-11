@@ -1,12 +1,18 @@
 %include "mmap.asm"
 %include "bob.asm"
 
+; constants (for page table bits)
 PAGE_PRESENT   equ   1
 PAGE_WRITE     equ   2
 PAGE_SUPER     equ   4
 
 PAGE_LEN       equ   0x01000
 
+; Start
+; Boot loader places us in next block (512B)
+; - we are in 64 bit mode, with limited page tables and interrupts off
+; - screen resolution has been set via VBE, info in the BOB
+; - memmap (INT15) info is in the BOB
 	org 0x7e00
 
 	bits 64
@@ -27,7 +33,7 @@ PAGE_LEN       equ   0x01000
 	mov  eax, [BOOT_PARMS+0x10]
 	;Ned set WC
 	call add_2M_page
-	;;; leaves eax pointing to the pde
+	;;; leaves eax with the pde and rsi with address of it
 
 	;;; need two for 4 MB VRAM
 	add eax, 0x20_0000 |0x80|PAGE_PRESENT|PAGE_WRITE|PAGE_SUPER
@@ -140,7 +146,7 @@ acpi_found:
 	xor ecx, ecx
 	call write_isr_to_idt
 
-	;; irq1
+	;; irq1 (keyboard)
 	mov edx, isr_mouse_keyb
 	inc ecx
 	inc ecx
@@ -197,8 +203,8 @@ acpi_found:
 	inc ecx
 	call write_isr_to_idt
 
-	;; irq12
-	mov edx, isr_mouse_keyb
+	;; irq12 (mouse)
+	mov edx, isr_dev_nop
 	inc ecx
 	inc ecx
 	call write_isr_to_idt
@@ -268,8 +274,6 @@ acpi_found:
 
 	sti
 
-	; draw a character
-
 	; success, aqua screen of life
 	mov  rax, 0x0000_FF00_0000_00FF
 	call fill_screen
@@ -277,24 +281,8 @@ acpi_found:
 	; clear a terminal box
 	mov esi, termLR_ctx
 
-	;; x coord (px to bytes)
-	mov edx, [rsi] ; x position in px
-	shl edx, 2  ; px -> 4 bytes / px
-
-	;; y coord (px to bytes)
-	mov edi, [rsi+4] ; y position in px
-	shl edi, 2 ; 4 bytes / px
-
-	;; rect width (chars to px)
-	mov ecx, [rsi+8] ; width in chars
-	imul ecx, 6 ; 6 px per char
-
-	;; height, (chars to px)
-	mov ebx, [rsi+12] ; height in chars
-	imul ebx, 10 ; 10 px per char
-
 	xor eax, eax    ; pixel color
-	call fill_rect
+	call fill_term
 
 	; printf Hello world (in white)
 	mov eax, 0xffff_ffff
@@ -329,7 +317,8 @@ check_keyboard:
 	mov  WORD [rdi*2+BOOT_PARMS+INPUT_QUEUE], 0
 
 	; move along
-	inc rdi
+	inc edi
+	and edi, 0xfff
 	mov [BOOT_PARMS+QUEUE_START], edi
 
 	jmp check_keyboard
@@ -542,6 +531,12 @@ vputc:
 	jb .done
 
 	;; shift screen
+	;;; temp hack, clear and reset
+	xor ecx, ecx
+	push rax
+	xor eax, eax ; black
+	call fill_term
+	pop rax
 
 .done:
 	mov [rsi+16], ebx
@@ -610,9 +605,31 @@ vputs:
 	pop rdx
 	ret
 
+fill_term:
+	; IN esi - term ctxt
+	; IN eax - pixel
+	push rcx
+	push rdi
+	push rdx
+	push rbx
+
+	imul ecx, [rsi+ 8], 6 ; term width, chars to px
+	mov  edi, [rsi+ 4]    ; y coord (px)
+	shl  edi, 2           ; px to bytes
+	mov  edx, [rsi+ 0]    ; x coord
+	shl  edx, 2           ; px to bytes
+	imul ebx, [rsi+12], 10; term height, chars to px
+	call fill_rect
+
+	pop rbx
+	pop rdx
+	pop rdi
+	pop rcx
+	ret
+
 fill_rect:
 	; IN eax - pixel to fill
-	; IN rcx - width in pixels
+	; IN ecx - width in pixels
 	; IN edi - y coord (bytes)
 	; IN edx - x coord (bytes, ie. col*4)
 	; IN ebx - height
