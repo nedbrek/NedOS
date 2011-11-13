@@ -87,18 +87,16 @@ acpi_found:
 .found_apic:
 	mov ebx, 44
 
+.next_entry:
 	mov eax, [rsi+rbx]
 	cmp al, 1 ; want IOAPIC
 	je .found_ioapic
 
-	;; add proc apic offset
+	;; add offset
 	shr eax, 8
 	and eax, 0xff
 	add ebx, eax
-
-	mov eax, [rsi+rbx]
-	cmp al, 1 ; still looking for IOAPIC
-	jne panic
+	jmp .next_entry
 
 .found_ioapic:
 	mov edi, [rsi+rbx+4]

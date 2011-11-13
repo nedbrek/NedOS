@@ -1,7 +1,7 @@
-.PHONY: all clean run
+.PHONY: all clean
 CPPFLAGS = -Wall -g
 
-all: cddump.exe mkcd.exe
+all: test.iso cddump.exe mkcd.exe
 
 -include Depend.Make
 -include DependAsm.Make
@@ -31,7 +31,7 @@ DependAsm.Make: boot.asm kernel.asm
 os.bin: boot kernel
 	@cat boot kernel > os.bin
 
-run: mkcd.exe os.bin
-	@genisoimage -quiet -o test.iso -b os.bin -no-emul-boot -m test.iso .
+test.iso: os.bin
+	@genisoimage -quiet -o $@ -b $< -no-emul-boot -m $@ .
 #	@./mkcd.exe os.bin
 

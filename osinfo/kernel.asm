@@ -84,7 +84,12 @@ debug_printMSRs:
 	mov edi, 0xe_0000
 	mov ecx, (0x10_0000 - 0xe_0000) >> 3
 	repne scasq
-	jne panic ; oh no
+	jz acpi_found ; yea
+
+	mov eax, 0x0700
+	mov ebx, str_no_acpi
+	call puts
+	jmp panic
 
 acpi_found:
 	; RSDP is at edi-8 (scas leaves things for next)
@@ -117,7 +122,12 @@ acpi_found:
 
 	mov eax, [rsi+rbx]
 	cmp al, 1 ; want IOAPIC
-	jne panic
+	jz .found_ioapic
+
+	mov eax, 0x0700
+	mov ebx, str_no_ioapic
+	call puts
+	jmp panic
 
 .found_ioapic:
 	mov edi, [rsi+rbx+4]
@@ -501,6 +511,8 @@ printMSR:
 
 	ret
 
-str_hello64:
-	db "Hello from 64 bit land",0xa,0
+str_hello64: db "Hello from 64 bit land",0xa,0
+str_no_acpi: db "ACPI tables not found",0xa,0
+str_acpi:    db "ACPI tables found",0xa,0
+str_no_ioapic: db "IOAPIC table not found", 0xa, 0
 
