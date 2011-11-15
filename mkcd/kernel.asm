@@ -291,6 +291,39 @@ acpi_found:
 	mov rdx, hi_str
 	call vputs
 
+	; eax has print color
+	; esi has term context
+check_memmap:
+	mov edi, MMAP_BASE-24
+
+.top:
+	add edi, 24
+	mov ebx, [rdi+16] ; mem type
+
+	test ebx, ebx
+	jz .done ; zero -> done
+
+	cmp ebx, 1 ; normal
+	jnz .top
+
+	;; print base
+	mov rdx, [rdi]
+	call vputQWord
+
+	mov dl, ' '
+	call vputc
+
+	;; print length
+	mov rdx, [rdi+8]
+	call vputQWord
+
+	mov dl, 10
+	call vputc
+
+	jmp .top
+
+.done:
+
 check_keyboard:
 	xor ebx, ebx ; escape flag
 	mov edi, [BOOT_PARMS+QUEUE_START]
@@ -615,6 +648,50 @@ vputByte:
 	pop  rdx
 	and dl, 0xf
 	call vputNibble
+
+	ret
+
+vputWord:
+	; IN  rax - color
+	; IN  dx  - word
+	; IN  esi - context ptr
+	; OUT dl  - ASCII value of lowest nibble
+	push rdx
+	shr edx, 8
+	call vputByte
+
+	pop rdx
+	and edx, 0xff
+	call vputByte
+
+	ret
+
+vputDWord:
+	; IN  rax - color
+	; IN  edx - dword
+	; IN  esi - context ptr
+	; OUT dl  - ASCII value of lowest nibble
+	push rdx
+	shr edx, 16
+	call vputWord
+
+	pop rdx
+	and edx, 0xffff
+	call vputWord
+
+	ret
+
+vputQWord:
+	; IN  rax - color
+	; IN  rdx - qword
+	; IN  esi - context ptr
+	; OUT dl  - ASCII value of lowest nibble
+	push rdx
+	shr rdx, 32
+	call vputDWord
+
+	pop rdx
+	call vputDWord
 
 	ret
 

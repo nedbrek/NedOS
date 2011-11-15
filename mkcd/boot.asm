@@ -32,8 +32,6 @@ BIOS_SET_A20M	equ	0x2401
 	lds si, [es:di+14] ; load list seg:off into ds:si
 	add di, 0x200 ; shift past VESA info block
 
-	xchg bx,bx
-
 	;; fill the mode info block
 top_vbe:
 	mov cx, [si] ; mode we will consider
@@ -134,6 +132,7 @@ fun_getMMap:
 	mov edx, ebp ; 'SMAP'
 	mov BYTE [di+20], 1 ; set ACPI 3 valid
 
+	; requires ES:DI to point to out buf, EBX=index, EDX='SMAP', EAX=E820, ECX=24
 	int 0x15
 	ret
 
@@ -152,17 +151,20 @@ done_vbe:
 	; save boot disk id
 	mov [di], dx
 
-	; get mem map
+get_mem_map:
+	xchg bx,bx
+
 	mov ax, (MMAP_BASE >> 4)
 	call fun_kzero
+
+	push es
+	pop  ds
 
 	mov ebp, 'PAMS' ; 'SMAP' little endian
 
 	;; first call is CF==error
-	xor ebx, ebx
-
+	xor  ebx, ebx
 	call fun_getMMap
-
 	jc  error
 
 	cmp eax, ebp ; success will copy old edx to eax (edx is trash)
@@ -171,37 +173,33 @@ done_vbe:
 	test ebx, ebx ; ebx == 0 is done
 	je   doneMap
 
-	jcxz nextMap ; skip zero len entries
-
-	add di, 24 ; advance to next
+	jcxz .nextMap ; skip zero len entries
 
 	; later calls are CF==done
-nextMap:
+	add di, 24 ; advance to next
+
+.nextMap:
 	call fun_getMMap
-	jc   doneMap
+	jc   doneMap  ; now, carry is done
 	test ebx, ebx ; ebx == 0 is done too
 	je   doneMap
 
-	jcxz nextMap ; skip zero len entries
-
-	; check for extended entry valid
-	test BYTE [di+20], 1
-	jz   nextMap
+	jcxz .nextMap ; skip zero len entries
 
 	; test for len==0 (qword from di+8..15)
-	xor  esi, esi
-	test [di+8], esi
-	jnz  incMap
-	test [di+12], esi
-	jz   nextMap
+	xor esi, esi
+	cmp [di+8], esi
+	jnz .incMap
+	cmp [di+12], esi
+	jz  .nextMap
 
 	; advance to next
-incMap:
+.incMap:
 	add di, 24
 	cmp di, 0xfff0
 	je  error ; ran out of buffer space (2730 entries!)
 
-	jmp nextMap
+	jmp .nextMap
 
 doneMap:
 
