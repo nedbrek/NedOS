@@ -134,7 +134,6 @@ acpi_found:
 	mov al, 0x10
 	out 0x43, al
 
-	xchg bx,bx
 	; fill IDT
 	;; skip entries 00..EF (for now)
 	mov edi, IDT_BASE+0xF0*16
@@ -265,7 +264,6 @@ acpi_found:
 	mov esi, PAGE_BASE
 	call add_2M_page
 
-	xchg bx,bx
 	; enable APIC
 	mov edi, 0xfee0_00f0
 	mov DWORD [rdi], 0x100 ; write SVR
@@ -306,19 +304,7 @@ check_memmap:
 	cmp ebx, 1 ; normal
 	jnz .top
 
-	;; print base
-	mov rdx, [rdi]
-	call vputQWord
-
-	mov dl, ' '
-	call vputc
-
-	;; print length
-	mov rdx, [rdi+8]
-	call vputQWord
-
-	mov dl, 10
-	call vputc
+	call install_ram
 
 	jmp .top
 
@@ -451,7 +437,6 @@ add_2M_page:
 	; IN eax - vaddr to add a page for
 	; IN esi - start of page table (CR3)
 	; OUT eax - addr of pde
-	xchg bx, bx
 	push rdi
 
 	mov edi, eax
@@ -485,6 +470,80 @@ add_2M_page:
 
 	mov eax, edi
 	pop rdi
+	ret
+
+install_ram:
+	; IN  rdi - ACPI table entry
+	; IN  esi - term context
+	; IN  eax - print color
+	; OUT rdx - trashed
+	; OUT rbx - trashed
+	; OUT rcx - trashed
+	xchg bx,bx
+	mov rdx, [rdi] ; load base
+
+	; check for blocks below 1 MB
+	mov ebx, 0x10_0000 ; 1MB
+	cmp rdx, rbx
+	jb .end ; ignore them
+
+	; now we need to handle 1MB-2MB, which is problematic (it is covered by the 1M table)
+	mov ebx, 0x20_0000 ; 2MB
+	cmp rdx, rbx
+	ja .trimBase ; region starts above 2M
+
+	add rdx, [rdi+8] ; size
+	cmp rdx, rbx
+	jbe .end ; region ends at or below 2M
+
+	sub ebx, [rdi]     ; find how much is below 2M
+	sub [rdi+8], rbx   ; remove it from the size of the region
+
+	mov edx, 0x20_0000 ; reset the base
+	mov [rdi], rdx
+	jmp .trimLimit ; base is aligned
+
+.trimBase:
+	; make sure base is aligned to 2M boundary
+	mov ebx, edx
+	mov ecx, 0x1f_ffff
+	and ebx, ecx ; ebx gets low bits
+	jz .trimLimit; no low bits
+
+	; skip to next aligned page
+	inc ecx
+	sub ecx, ebx ; how much are we skipping?
+	add rdx, rcx
+	mov [rdi], rdx
+	sub [rdi+8], rcx ; subtract from size
+
+	; same for limit
+.trimLimit:
+	mov ecx, 0x1f_ffff
+	add rdx, [rdi+8] ; limit = base (rdx) + size
+	dec rdx ; topmost address is 1 short
+	mov ebx, edx
+	and ebx, ecx ; low bits
+	jz .install ; none
+
+	inc ebx
+	sub [rdi+8], rbx ; must drop off ebx from the end
+
+.install:
+	mov rdx, [rdi]
+	call vputQWord
+
+	mov dl, ' '
+	call vputc
+
+	;; print length
+	mov rdx, [rdi+8]
+	call vputQWord
+
+	mov dl, 10
+	call vputc
+
+.end:
 	ret
 
 fill_row:
@@ -583,7 +642,6 @@ vputc:
 	mov ebx, [rsi+16]
 	mov ecx, [rsi+20]
 
-	;xchg bx,bx ; for testing wrap logic
 	;; next col
 	inc ebx
 	;; check for wrap
@@ -701,7 +759,6 @@ vputs:
 	; IN  esi - context ptr
 	; OUT rdx - end of string
 
-	xchg bx,bx
 .nextc:
 	push rdx
 	movzx edx, BYTE [rdx]
@@ -748,7 +805,6 @@ fill_rect:
 	; IN ebx - height
 	; OUT ebx - zero
 	; OUT edi - end of filled block in LFB
-	xchg bx,bx
 
 	push rsi
 	;; save width
