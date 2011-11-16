@@ -33,7 +33,7 @@ PAGE_LEN       equ   0x01000
 	mov  eax, [BOOT_PARMS+0x10]
 	;Ned set WC
 	call add_2M_page
-	;;; leaves eax with the pde and rsi with address of it
+	;;; leaves rsi with address of pde
 
 	;;; need two for 4 MB VRAM
 	add eax, 0x20_0000 |0x80|PAGE_PRESENT|PAGE_WRITE|PAGE_SUPER
@@ -280,17 +280,6 @@ acpi_found:
 	xor eax, eax    ; pixel color
 	call fill_term
 
-	; printf Hello world (in white)
-	mov eax, 0xffff_ffff
-	mov rdx, long_str
-	call vputs
-
-	; again (test newline code)
-	mov rdx, hi_str
-	call vputs
-
-	; eax has print color
-	; esi has term context
 check_memmap:
 	mov edi, MMAP_BASE-24
 
@@ -311,6 +300,7 @@ check_memmap:
 .done:
 
 check_keyboard:
+	mov esi, termLR_ctx
 	xor ebx, ebx ; escape flag
 	mov edi, [BOOT_PARMS+QUEUE_START]
 
@@ -436,7 +426,7 @@ isr_mouse_keyb:
 add_2M_page:
 	; IN eax - vaddr to add a page for
 	; IN esi - start of page table (CR3)
-	; OUT eax - addr of pde
+	; OUT esi - addr of pde
 	push rdi
 
 	mov edi, eax
@@ -530,18 +520,39 @@ install_ram:
 	sub [rdi+8], rbx ; must drop off ebx from the end
 
 .install:
+	mov esi, termLR_ctx
+	mov eax, 0xffff_ffff
+	mov edx, ram1_str
+	call vputs
+
 	mov rdx, [rdi]
+	mov rcx, rdx
 	call vputQWord
 
-	mov dl, ' '
-	call vputc
+	mov edx, ram2_str
+	call vputs
 
-	;; print length
 	mov rdx, [rdi+8]
+	add rcx, rdx ; rcx -> top of mem block
+	mov rdx, rcx
 	call vputQWord
 
 	mov dl, 10
 	call vputc
+
+	mov ebx, 0x20_0000
+	mov rdx, [rdi]
+
+.install_top:
+	cmp rdx, rcx
+	jae .end
+
+	mov esi, PAGE_BASE
+	mov rax, rdx
+	call add_2M_page
+
+	add rdx, rbx
+	jmp .install_top
 
 .end:
 	ret
@@ -906,14 +917,11 @@ termLR_ctx:
 	dd   0 ; cursor X (chars)
 	dd   0 ; cursor Y (chars)
 
-hi_str:
-	db "Hello, world",10,0
+ram1_str:
+	db "Usable pages from ",0
 
-long_str:
-	db "A very, very, very long string.  To test console wrapping, you know."
-	db "  Wrapping is a very important function."
-	db 10
-	db  0
+ram2_str:
+	db " to ",0
 
 keymap:
 %include "keymap.asm"
