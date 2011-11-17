@@ -22,7 +22,8 @@ struc BasicString
 endstruc
 
 ; 8K located at the top of the 64K BOB region
-INPUT_QUEUE equ BOOT_PARMS + 0x1_0000 - 0x2000
+INPUT_QUEUE_SIZE equ 0x2000
+INPUT_QUEUE equ BOOT_PARMS + 0x1_0000 - INPUT_QUEUE_SIZE
 ; start and end pointers located in different cache lines
 QUEUE_START equ INPUT_QUEUE - 32
 QUEUE_END   equ INPUT_QUEUE - 64

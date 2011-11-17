@@ -300,6 +300,11 @@ check_memmap:
 .done:
 
 check_keyboard:
+	xor rax, rax
+	mov ecx, INPUT_QUEUE_SIZE >> 3
+	mov edi, INPUT_QUEUE
+	rep stosq
+
 	mov esi, termLR_ctx
 	xor ebx, ebx ; escape flag
 	mov edi, [BOOT_PARMS+QUEUE_START]
