@@ -547,17 +547,28 @@ install_ram:
 
 	mov ebx, 0x20_0000
 	mov rdx, [rdi]
+	cmp rdx, rcx
+	jae .end ; nothing to install
 
 .install_top:
-	cmp rdx, rcx
-	jae .end
-
 	mov esi, PAGE_BASE
 	mov rax, rdx
 	call add_2M_page
 
 	add rdx, rbx
-	jmp .install_top
+	cmp rdx, rcx
+	jb .install_top
+
+.finish: ; update free list
+	mov rdx, [rdi] ; get base again
+	cmp rdx, rcx ; make sure there is something
+	jae .end
+
+	mov rcx, [BOOT_PARMS+Bob.freeList] ; head of list (could be NULL)
+	mov [rdx], rcx ; block->next = freeList
+	mov rcx, [rdi+8] ; size
+	mov [rdx+8], rcx ; block->size = size
+	mov [BOOT_PARMS+Bob.freeList], rdx ; freeList = block
 
 .end:
 	ret
