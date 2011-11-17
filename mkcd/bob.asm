@@ -1,10 +1,25 @@
-BOOT_DISK   equ  0
-VGA_WIDTH   equ  4
-VGA_HEIGHT  equ  8
-VGA_BPP     equ 12
-VGA_LFBP    equ 16
-VGA_CAPS    equ 20
-VGA_MODE    equ 24
+struc Bob
+	.bootDisk:  resd 1; value from POST in DX
+	.vgaWidth:  resd 1; px
+	.vgaHeight: resd 1; px
+	.vgaBPP:    resd 1; bits
+	.vgaLFBP:   resd 1; near*
+	.vgaCaps:   resd 1
+	.vgaMode:   resd 1
+	.freeList:  resd 1; near*, start of free memory
+endstruc
+
+struc Vector
+	.len: resd 1
+	.cap: resd 1
+	.ary: resd 1
+endstruc
+
+struc BasicString
+	.vtbl: resd 1
+	.ref:  resd 1
+	.vec:  resb Vector_size
+endstruc
 
 ; 8K located at the top of the 64K BOB region
 INPUT_QUEUE equ BOOT_PARMS + 0x1_0000 - 0x2000

@@ -1,0 +1,59 @@
+typedef near* int32;
+typedef far*  int64;
+
+interface String
+{
+	// these could be part of "Object", but String is the only Object!
+	near*       typeInfo; // bottom 4GB
+	void        delete();
+	far String* clone();
+	void        incRef();
+	void        decRef();
+
+	int32       length();
+	void        append_near(near String *s);
+	void        append_far (far  String *s);
+}
+
+/// handy for implementation
+class Vector<Type>
+{
+	int32 len;
+	int32 cap;
+	near Type *ary;
+}
+
+/// a C-string
+class InlineString
+{
+	char bytes[]; // 0 terminated
+}
+
+/// wrap a C-style string in the String interface
+/// (strings larger than 4GB should probably be chunked)
+class CwrappedStringNear : String
+{
+	near InlineString* actual;
+	int32 length;
+	int32 refCnt;
+}
+
+class BasicString : String
+{
+	int32 refCnt;
+	Vector<char> str;
+}
+
+class JoinedStringNear : String
+{
+	int32 refCnt;
+	near String*  joinStr;
+	Vector<String> strings;
+}
+
+/// an interposer which can be held near, but which points to a far String
+class NearStringFar : String
+{
+	far String* actual;
+}
+

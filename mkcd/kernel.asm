@@ -30,7 +30,7 @@ PAGE_LEN       equ   0x01000
 
 	;; install VRAM pages
 	;;; get the video mem base
-	mov  eax, [BOOT_PARMS+0x10]
+	mov  eax, [BOOT_PARMS+Bob.vgaLFBP]
 	;Ned set WC
 	call add_2M_page
 	;;; leaves rsi with address of pde
@@ -566,13 +566,13 @@ fill_row:
 	; OUT edi - pixel after last in row
 
 	;; scale y coord by screen width
-	imul edi, [BOOT_PARMS+4]
+	imul edi, [BOOT_PARMS+Bob.vgaWidth]
 
 	;; add x coord
 	add  edi, edx
 
 	;; add to lfb base
-	add  edi, [BOOT_PARMS+0x10]
+	add  edi, [BOOT_PARMS+Bob.vgaLFBP]
 
 	rep stosd
 
@@ -605,7 +605,7 @@ vputc:
 	add  edi, [rsi+ 4]
 
 	;;; ebx = screen.width
-	mov ebx, [BOOT_PARMS+4]
+	mov ebx, [BOOT_PARMS+Bob.vgaWidth]
 
 	;;; edi = (console.y + cursor.y * 10) * screen.width
 	imul edi, ebx
@@ -620,7 +620,7 @@ vputc:
 	shl edi, 2
 
 	;; add to lfb base
-	add  edi, [BOOT_PARMS+0x10]
+	add  edi, [BOOT_PARMS+Bob.vgaLFBP]
 
 	sub ebx, 6 ; wrap short 6 px
 	;; scale px to bytes
@@ -822,7 +822,7 @@ fill_rect:
 	push rcx
 
 	;; get screen width
-	mov esi, [BOOT_PARMS+4]
+	mov esi, [BOOT_PARMS+Bob.vgaWidth]
 
 	;; scale y coord by screen width
 	imul edi, esi
@@ -836,7 +836,7 @@ fill_rect:
 	add  edi, edx
 
 	;; add to lfb base
-	add  edi, [BOOT_PARMS+0x10]
+	add  edi, [BOOT_PARMS+Bob.vgaLFBP]
 
 .fill_row:
 	rep stosd
@@ -857,13 +857,13 @@ fill_screen:
 	; OUT rdx - screen width
 	; OUT rcx - 0
 	; OUT rdi - end of screen mem
-	mov  edx, [BOOT_PARMS+4]
-	mov  ecx, [BOOT_PARMS+8]
+	mov  edx, [BOOT_PARMS+Bob.vgaWidth]
+	mov  ecx, [BOOT_PARMS+Bob.vgaHeight]
 	imul ecx, edx
 	shr  ecx, 1 ; we will write 2 pixels per
 
 	;; write
-	mov  edi, [BOOT_PARMS+0x10]
+	mov  edi, [BOOT_PARMS+Bob.vgaLFBP]
 	rep stosq
 	ret
 

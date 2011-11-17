@@ -1,8 +1,9 @@
 ; bootloader
 %include "mmap.asm"
+%include "bob.asm"
 
 ; constants
-BIOS_GET_MMAP	equ   0xe820
+BIOS_GET_MMAP	equ 0xe820
 BIOS_SET_A20M	equ	0x2401
 
 ; section start
@@ -61,7 +62,7 @@ top_vbe:
 	jne next_vbe
 
 	mov al, [di+25] ; get bpp
-	cmp BYTE [12], 32
+	cmp BYTE [Bob.vgaBPP], 32
 	jne vbe_not_32bpp
 
 	;;; if we already have 32 bpp
@@ -77,31 +78,31 @@ vbe_check_width:
 	ja  next_vbe
 
 	;;; compare widths
-	cmp ax, [4]
+	cmp ax, [Bob.vgaWidth]
 	jbe next_vbe ; less or same, skip
 	jmp save_vbe ; more, save
 
 vbe_not_32bpp:
 	;;; current mode is not 32bpp (ax is new bpp)
-	cmp al, [12]
+	cmp al, [Bob.vgaBPP]
 	jb  next_vbe        ; less, skip
 	ja  save_vbe        ; more, take it
 	jmp vbe_check_width ; equal, check width
 
 save_vbe:
 	mov ax, [di+18] ; get width
-	mov [4], ax
+	mov [Bob.vgaWidth], ax
 	mov ax, [di+20] ; get height
-	mov [8], ax
+	mov [Bob.vgaHeight], ax
 	mov al, [di+25] ; get bpp
-	mov [12], al
+	mov [Bob.vgaBPP], al
 	mov ax, [di+40] ; get lfb
-	mov [16], ax
-	mov ax, [di+42] ; get lfb
-	mov [18], ax
+	mov [Bob.vgaLFBP], ax
+	mov ax, [di+42] ; get high word lfb
+	mov [Bob.vgaLFBP+2], ax
 	mov al, [di]    ; get caps
-	mov [20], al
-	mov [24], cx    ; store mode
+	mov [Bob.vgaCaps], al
+	mov [Bob.vgaMode], cx    ; store mode
 
 next_vbe:
 	pop ds
@@ -149,7 +150,7 @@ done_vbe:
 
 	xor  di, di
 	; save boot disk id
-	mov [di], dx
+	mov [di+Bob.bootDisk], dx
 
 get_mem_map:
 	xchg bx,bx
