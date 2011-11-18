@@ -1,5 +1,6 @@
 .PHONY: all clean
-CPPFLAGS = -Wall -g
+CPPFLAGS += -Wall -g
+ASMFLAGS := -w+orphan-labels
 
 all: test.iso cddump.exe mkcd.exe
 
@@ -22,11 +23,11 @@ Depend.Make: *.cpp *.h
 	@g++ -MM $^ > Depend.Make
 
 DependAsm.Make: boot.asm kernel.asm
-	@nasm -M boot.asm    > DependAsm.Make
-	@nasm -M kernel.asm >> DependAsm.Make
+	@nasm $(ASMFLAGS) -M boot.asm    > DependAsm.Make
+	@nasm $(ASMFLAGS) -M kernel.asm >> DependAsm.Make
 
 %: %.asm
-	@nasm -Ox $<
+	@nasm $(ASMFLAGS) -Ox $<
 
 os.bin: boot kernel
 	@cat boot kernel > os.bin

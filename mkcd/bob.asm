@@ -6,13 +6,13 @@ struc Bob
 	.vgaLFBP:   resd 1; near*
 	.vgaCaps:   resd 1
 	.vgaMode:   resd 1
-	.freeList:  resd 1; near*, start of free memory
+	.freeList:  resq 1; far*, start of free memory
 endstruc
 
 struc Vector
 	.len: resd 1
 	.cap: resd 1
-	.ary: resd 1
+	.ary: resq 1
 endstruc
 
 struc BasicString

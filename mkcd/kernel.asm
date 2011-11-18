@@ -299,13 +299,18 @@ check_memmap:
 
 .done:
 
-check_keyboard:
 	xor rax, rax
 	mov ecx, INPUT_QUEUE_SIZE >> 3
 	mov edi, INPUT_QUEUE
 	rep stosq
 
 	mov esi, termLR_ctx
+
+	mov eax, 512
+	call BasicString~new@int
+	mov r9, rax
+
+check_keyboard:
 	xor ebx, ebx ; escape flag
 	mov edi, [BOOT_PARMS+QUEUE_START]
 
@@ -379,7 +384,6 @@ idt:
 
 isr_dev_nop:
 	; empty interrupt handler for devices
-	inc r9
 	push rax
 	mov rax, 0xfee0_00b0
 	mov DWORD [rax], 0 ; write EOI
@@ -571,6 +575,56 @@ install_ram:
 	mov [BOOT_PARMS+Bob.freeList], rdx ; freeList = block
 
 .end:
+	ret
+
+malloc:
+	; IN  eax - size (don't malloc more than 4GB!)
+	; OUT rax - addr of block
+	push rdi
+	push rsi
+	push rcx
+
+	mov  rsi, [BOOT_PARMS+Bob.freeList]
+	mov  rdi, [rsi+8] ; block size
+	cmp  rdi, rax
+	jb   .next_block
+
+	mov  rcx, rax
+	mov  rax, rsi
+
+	sub  rdi, rcx ; shrink size
+	add  rsi, rcx ; shift head
+
+	mov rcx, [rax] ; move next block ptr
+	mov [rsi], rcx
+
+	mov [rsi+8], rdi ; update size
+
+	mov [BOOT_PARMS+Bob.freeList], rsi ; update free list
+
+	jmp .end
+
+.next_block: ; Ned, implement
+	xor eax, eax ; return NULL for now
+
+.end:
+	pop  rcx
+	pop  rsi
+	pop  rdi
+	ret
+
+free:
+	; IN rax - address of free block
+	; IN ecx - size of block (see malloc about 4GB)
+	push rdi
+
+	mov rdi, [BOOT_PARMS+Bob.freeList]
+	mov [rax], rdi
+	mov [rax+8], rcx
+
+	mov [BOOT_PARMS+Bob.freeList], rax
+
+	pop  rdi
 	ret
 
 fill_row:
@@ -924,6 +978,37 @@ panic:
 die:
 	inc rax
 	jmp die
+
+Vector~init@int:
+	; IN  eax - initial buffer size
+	; IN  ecx - this
+	; trashed eax
+	mov DWORD [rcx+Vector.len], 0
+	mov [rcx+Vector.cap], eax
+
+	call malloc
+	mov [rcx+Vector.ary], rax
+	ret
+
+BasicString~new@int:
+	; IN  eax - initial buffer size
+	; OUT rax - ptr to string
+	; trashed r9
+	push rax
+
+	mov  eax, BasicString_size
+	call malloc
+	mov  r9, rax
+	mov DWORD [rax+BasicString.vtbl], 0
+	mov DWORD [rax+BasicString.ref], 1
+
+	lea  rcx, [rax+BasicString.vec]
+	pop  rax
+
+	call Vector~init@int
+
+	mov rax, r9
+	ret
 
 termLR_ctx:
 	dd 480 ; console x pos (px)
