@@ -372,6 +372,9 @@ check_keyboard:
 	jb check_keyboard
 
 .actual_print:
+	mov ecx, r9d
+	call BasicString~appendChar
+
 	mov eax, 0xffff_ffff
 	call vputc
 
@@ -1009,6 +1012,43 @@ BasicString~new@int:
 
 	mov rax, r9
 	ret
+
+BasicString~appendChar: ;Ned? make into Vector~push_back?
+	; IN rdx - char (TODO Ned, support UTF-8)
+	; IN rcx - this
+	push rsi
+	push rdi
+
+	; get length
+	mov esi, [rcx+BasicString.vec+Vector.len]
+	; check for overflow
+	cmp esi, [rcx+BasicString.vec+Vector.cap]
+	jae .end ; TODO Ned, add vector growth
+
+	; get data array
+	mov rdi, [rcx+BasicString.vec+Vector.ary]
+	; store char to array (TODO UTF-8)
+	mov [rdi+rsi], dl
+
+	; update length
+	inc esi
+	mov [rcx+BasicString.vec+Vector.len], esi
+
+.end:
+	pop  rdi
+	pop  rsi
+	ret
+
+BasicString~vtable:
+	.typeInfo   dd 0
+	.delete     dd 0;BasicString~delete
+	.clone      dd 0;BasicString~clone
+	.incRef     dd 0;BasicString~incRef
+	.decRef     dd 0;BasicString~decRef
+	.length     dd 0;BasicString~length
+	.appendChar dd BasicString~appendChar
+	.appendNear dd 0;BasicString~appendNear
+	.appendFar  dd 0;BasicString~appendFar
 
 termLR_ctx:
 	dd 480 ; console x pos (px)
