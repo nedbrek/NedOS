@@ -665,7 +665,7 @@ vputc:
 	je .next_row
 
 	sub edx, 32
-	mov rdx, [rdx*8+space]
+	mov rdx, [rdx*8 + font6x10.space]
 
 .normal:
 	; get upper right of char
@@ -1067,5 +1067,6 @@ ram2_str:
 keymap:
 %include "keymap.asm"
 
+font6x10:
 %include "font.asm"
 

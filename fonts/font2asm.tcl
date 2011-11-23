@@ -30,6 +30,6 @@ foreach l $lines {
 	set name [lindex $l 0]
 	set code [lindex $l 1]
 	set bmp  [lrange $l 2 end]
-	puts "[fixName $name]: ; $code\n\tdq 0x[format %lx [decodeBmp $bmp]]"
+	puts ".[fixName $name]: ; $code\n\tdq 0x[format %lx [decodeBmp $bmp]]"
 }
 
