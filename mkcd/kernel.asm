@@ -371,6 +371,9 @@ check_keyboard:
 	cmp dl, 32 ; check for unprintable
 	jb check_keyboard
 
+	cmp dl, 127 ; DEL
+	jz check_keyboard
+
 .actual_print:
 	mov ecx, r9d
 	call BasicString~appendChar
