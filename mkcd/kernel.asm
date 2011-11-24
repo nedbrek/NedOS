@@ -299,18 +299,40 @@ check_memmap:
 
 .done:
 
+	mov eax, 512
+	call BasicString~new@int
+	mov r9, rax
+
+	mov esi, termLR_ctx
+
+runCmd:
+	; print prompt
+	mov eax, 0xffff_ffff
+	xor edx, edx
+	mov dl, '%'
+	call vputc
+
+	mov dl, ' '
+	call vputc
+
 	xor rax, rax
 	mov ecx, INPUT_QUEUE_SIZE >> 3
 	mov edi, INPUT_QUEUE
 	rep stosq
 
-	mov esi, termLR_ctx
+	mov ecx, r9d
+	call BasicString~clear
 
-	mov eax, 512
-	call BasicString~new@int
-	mov r9, rax
+	xor ebp, ebp
 
 check_keyboard:
+	; eax - scratch
+	; ebx - escape flag
+	; ecx - command buffer this
+	; edx - char tmp
+	; edi - queue ptr
+	; esi - term ctxt
+	; ebp - count
 	xor ebx, ebx ; escape flag
 	mov edi, [BOOT_PARMS+QUEUE_START]
 
@@ -337,8 +359,8 @@ check_keyboard:
 	jnz  check_keyboard ; skip break codes
 
 	; if escape code
-	cmp  bl, 1
-	jae  .escape_code ; handle it
+	test  bl, bl
+	jnz  .escape_code ; handle it
 
 	jmp .print ; else, just print
 
@@ -368,19 +390,78 @@ check_keyboard:
 	cmp dl, 10 ; check for new line
 	jz .actual_print
 
+	cmp dl, 0x1a ; left arrow
+	jz .larrow
+
 	cmp dl, 32 ; check for unprintable
 	jb check_keyboard
 
 	cmp dl, 127 ; DEL
 	jz check_keyboard
 
+	jmp .actual_print
+
+.larrow:
+	test ebp, ebp
+	jz  check_keyboard
+
+	; shift pointer
+	dec ebp
+	; update cursor
+	push rax
+
+	mov  eax, [rsi+TermContext.cursorX]
+	test eax, eax
+	jz .decRow
+
+	dec eax
+	mov [rsi+TermContext.cursorX], eax
+
+	jmp .larrow_done
+
+.decRow:
+	; BUGFIX Ned, adjust to maxX
+	xor eax, eax
+	mov [rsi+TermContext.cursorX], eax
+	mov eax, [rsi+TermContext.cursorY]
+	; TODO Ned, handle scrollback
+	dec eax
+	mov [rsi+TermContext.cursorY], eax
+
+.larrow_done:
+	pop  rax
+
+	jmp check_keyboard
+
 .actual_print:
 	mov ecx, r9d
+	cmp ebp, [rcx+BasicString.vec+Vector.len]
+	jae .append
+
+	; buffer ptr
+	mov eax, [rcx+BasicString.vec+Vector.ary]
+
+	; overwrite current spot
+	mov [rax+rbp], dl
+	mov rdx, 0x0fff_ffff_ffff_ffff
+	xor eax, eax
+	call drawChar
+
+	; restore char
+	xor edx, edx
+	mov eax, [rcx+BasicString.vec+Vector.ary]
+	mov dl, [rax+rbp]
+
+	jmp .final_print
+
+.append:
 	call BasicString~appendChar
 
+.final_print:
 	mov eax, 0xffff_ffff
 	call vputc
 
+	inc ebp ; bump count
 	jmp check_keyboard
 	; end
 
@@ -654,23 +735,14 @@ fill_row:
 
 	ret
 
-vputc:
-	; IN rax - color (high bits bg)
-	; IN rdx - char code
-	; IN esi - context ptr
-	; OUT edx - zero
+drawChar:
+	; IN  rdx - pattern to draw
+	; OUT rdx - 0
 	push rbp
 	push rdi
 	push rbx
 	push rcx
 
-	cmp edx, 10
-	je .next_row
-
-	sub edx, 32
-	mov rdx, [rdx*8 + font6x10.space]
-
-.normal:
 	; get upper right of char
 	;; lfb + (console.y + cursor.y * 10) * screen.width +
 	;; console.x + cursor.x * 6
@@ -725,9 +797,47 @@ vputc:
 	dec ebp
 	jnz .put_row
 
+.done:
+	pop  rcx
+	pop  rbx
+	pop  rdi
+	pop  rbp
+	ret
+
+vputc:
+	; IN  rax - color (high bits bg)
+	; IN  rdx - char code
+	; IN  esi - context ptr
+	; OUT edx - zero
+	push rbp
+	push rdi
+	push rbx
+	push rcx
+
+	cmp edx, 10
+	je .updateCursor
+
+	sub edx, 32
+	mov rdx, [rdx*8 + font6x10.space]
+
+	call drawChar
+
+.updateCursor:
+	call cursorRight
+
+	pop rcx
+	pop rbx
+	pop rdi
+	pop rbp
+	ret
+
+cursorRight:
 	; update cursor
 	mov ebx, [rsi+16]
 	mov ecx, [rsi+20]
+
+	cmp edx, 10
+	je .next_row
 
 	;; next col
 	inc ebx
@@ -756,10 +866,6 @@ vputc:
 	mov [rsi+16], ebx
 	mov [rsi+20], ecx
 
-	pop rcx
-	pop rbx
-	pop rdi
-	pop rbp
 	ret
 
 vputNibble:
@@ -1042,23 +1148,44 @@ BasicString~appendChar: ;Ned? make into Vector~push_back?
 	pop  rsi
 	ret
 
+BasicString~clear:
+	; IN  rcx - this
+	push rax
+	xor  rax, rax
+	mov [rcx+BasicString.vec+Vector.len], eax
+	pop  rax
+	ret
+
+BasicString~length:
+	; IN  rcx - this
+	; OUT eax - length
+	mov eax, [rcx+BasicString.vec+Vector.len]
+	ret
+
 BasicString~vtable:
 	.typeInfo   dd 0
 	.delete     dd 0;BasicString~delete
 	.clone      dd 0;BasicString~clone
 	.incRef     dd 0;BasicString~incRef
 	.decRef     dd 0;BasicString~decRef
-	.length     dd 0;BasicString~length
+	.clear      dd BasicString~clear
+	.length     dd BasicString~length
 	.appendChar dd BasicString~appendChar
 	.appendNear dd 0;BasicString~appendNear
 	.appendFar  dd 0;BasicString~appendFar
 
 termLR_ctx:
+.consoleX:
 	dd 480 ; console x pos (px)
+.consoleY:
 	dd 500 ; console y pos (px)
+.width:
 	dd  80 ; width (chars)
+.height:
 	dd  25 ; height (chars)
+.cursorX:
 	dd   0 ; cursor X (chars)
+.cursorY:
 	dd   0 ; cursor Y (chars)
 
 ram1_str:

@@ -10,6 +10,7 @@ interface String
 	void        incRef();
 	void        decRef();
 
+	void        clear(); // reset to empty
 	int32       length();
 	void        append_near(near String *s);
 	void        append_far (far  String *s);

@@ -21,6 +21,15 @@ struc BasicString
 	.vec:  resb Vector_size
 endstruc
 
+struc TermContext
+	.consoleX: resd 1; console x pos (px)
+	.consoleY: resd 1; console y pos (px)
+	.width:    resd 1; width (chars)
+	.height:   resd 1; height (chars)
+	.cursorX:  resd 1; cursor X (chars)
+	.cursorY:  resd 1; cursor Y (chars)
+endstruc
+
 ; 8K located at the top of the 64K BOB region
 INPUT_QUEUE_SIZE equ 0x2000
 INPUT_QUEUE equ BOOT_PARMS + 0x1_0000 - INPUT_QUEUE_SIZE
