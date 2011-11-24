@@ -388,7 +388,7 @@ check_keyboard:
 	mov dl, [keymap+rax] ; map from scan code to ASCII
 
 	cmp dl, 10 ; check for new line
-	jz .actual_print
+	jz .doRunCmd
 
 	cmp dl, 0x1a ; left arrow
 	jz .larrow
@@ -463,6 +463,15 @@ check_keyboard:
 
 	inc ebp ; bump count
 	jmp check_keyboard
+
+.doRunCmd:
+	; print the eol
+	xor eax, eax
+	call vputc
+
+	; TODO Ned, process command
+
+	jmp runCmd
 	; end
 
 idt:
