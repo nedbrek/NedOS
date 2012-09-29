@@ -12,8 +12,15 @@ interface String
 
 	void        clear(); // reset to empty
 	int32       length();
+
+	void        append_char(char c);
 	void        append_near(near String *s);
 	void        append_far (far  String *s);
+
+	int32       intVal(int64 *outVal);
+	far String* lookup(far String *idx);
+
+	int32       run(StringMap *argDict);
 }
 
 /// handy for implementation
@@ -25,7 +32,7 @@ class Vector<Type>
 }
 
 /// a C-string
-class InlineString
+class CString
 {
 	char bytes[]; // 0 terminated
 }
@@ -34,9 +41,9 @@ class InlineString
 /// (strings larger than 4GB should probably be chunked)
 class CwrappedStringNear : String
 {
-	near InlineString* actual;
-	int32 length;
 	int32 refCnt;
+	int32 length;
+	near CString* actual;
 }
 
 class BasicString : String
@@ -49,7 +56,21 @@ class JoinedStringNear : String
 {
 	int32 refCnt;
 	near String*  joinStr;
-	Vector<String> strings;
+	Vector<near String*> strings;
+}
+
+class BasicMap : String
+{
+	int32 refCnt;
+	Vector<far String*> cmdNames;
+	Vector<int64> cmdLocs;
+}
+
+//TODO: infinite precision
+class IntString : String
+{
+	int32 refCnt;
+   QWord val_;
 }
 
 /// an interposer which can be held near, but which points to a far String
