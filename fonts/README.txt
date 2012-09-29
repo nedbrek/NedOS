@@ -9,8 +9,14 @@ http://www.cl.cam.ac.uk/~mgk25/ucs-fonts.html
 To convert them is a straight forward process (using the tools in this
 directory):
 
-# retrieve the ucs-fonts
+1) retrieve the ucs-fonts
 
+2) update the Makefile with your path
+
+3) make
+
+####
+# (the Makefile will do some of these steps for you)
 # convert all the font defs into byte wise bitmasks
 awk -f extract_font.awk /path/to/ucs-fonts/6x10.bdf > fontfile.txt
 
