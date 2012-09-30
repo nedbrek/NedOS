@@ -1171,8 +1171,9 @@ BasicString~length:
 	mov eax, [r15+BasicString.vec+Vector.len]
 	ret
 
+; vtables
 BasicString~vtable:
-	.typeInfo   dd 0
+	.typeInfo   dd 0xdeadbeef
 	.delete     dd 0;BasicString~delete
 	.clone      dd 0;BasicString~clone
 	.incRef     dd 0;BasicString~incRef
@@ -1182,6 +1183,42 @@ BasicString~vtable:
 	.appendChar dd BasicString~appendChar
 	.appendNear dd 0;BasicString~appendNear
 	.appendFar  dd 0;BasicString~appendFar
+	.compare    dd 0;BasicString~compare
+	.intVal     dd 0;BasicString~intVal
+	.lookup     dd 0;BasicString~lookup
+	.run        dd 0;BasicString~run
+
+CwrappedStringNear~vtable:
+	.typeInfo   dd 0xbaadf00d
+	.delete     dd 0;CwrappedStringNear~delete
+	.clone      dd 0;CwrappedStringNear~clone
+	.incRef     dd 0;CwrappedStringNear~incRef
+	.decRef     dd 0;CwrappedStringNear~decRef
+	.clear      dd 0;CwrappedStringNear~clear
+	.length     dd 0;CwrappedStringNear~length
+	.appendChar dd 0;CwrappedStringNear~appendChar
+	.appendNear dd 0;CwrappedStringNear~appendNear
+	.appendFar  dd 0;CwrappedStringNear~appendFar
+	.compare    dd 0;CwrappedStringNear~compare
+	.intVal     dd 0;CwrappedStringNear~intVal
+	.lookup     dd 0;CwrappedStringNear~lookup
+	.run        dd 0;CwrappedStringNear~run
+
+BasicMap~vtable:
+	.typeInfo   dd 0xabacdbad
+	.delete     dd 0;BasicMap~delete
+	.clone      dd 0;BasicMap~clone
+	.incRef     dd 0;BasicMap~incRef
+	.decRef     dd 0;BasicMap~decRef
+	.clear      dd 0;BasicMap~clear
+	.length     dd 0;BasicMap~length
+	.appendChar dd 0;BasicMap~appendChar
+	.appendNear dd 0;BasicMap~appendNear
+	.appendFar  dd 0;BasicMap~appendFar
+	.compare    dd 0;BasicMap~compare
+	.intVal     dd 0;BasicMap~intVal
+	.lookup     dd 0;BasicMap~lookup
+	.run        dd 0;BasicMap~run
 
 termLR_ctx:
 .consoleX:
