@@ -1166,9 +1166,9 @@ BasicString~clear:
 	ret
 
 BasicString~length:
-	; IN  rcx - this
+	; IN  r15 - this
 	; OUT eax - length
-	mov eax, [rcx+BasicString.vec+Vector.len]
+	mov eax, [r15+BasicString.vec+Vector.len]
 	ret
 
 BasicString~vtable:
