@@ -528,6 +528,47 @@ isr_mouse_keyb:
 	pop rax
 	iretq
 
+pci_read1:
+	; IN  eax pci addr
+	; OUT eax value
+	; OUT edx 0xcfc
+	xor edx, edx
+	mov dx, 0xcf8
+	out dx, eax
+
+	or  dl, 4
+	xor eax, eax
+	in  al, dx
+
+	ret
+
+pci_read2:
+	; IN  eax pci addr
+	; OUT eax value
+	; OUT edx 0xcfc
+	xor edx, edx
+	mov dx, 0xcf8
+	out dx, eax
+
+	or  dl, 4
+	xor eax, eax
+	in  ax, dx
+
+	ret
+
+pci_read4:
+	; IN  eax pci addr
+	; OUT eax value
+	; OUT edx 0xcfc
+	xor edx, edx
+	mov dx, 0xcf8
+	out dx, eax
+
+	or  dl, 4
+	in  eax, dx
+
+	ret
+
 add_2M_page:
 	; IN eax - vaddr to add a page for
 	; IN esi - start of page table (CR3)
