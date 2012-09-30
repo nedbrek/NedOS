@@ -1212,6 +1212,16 @@ BasicString~length:
 	mov eax, [r15+BasicString.vec+Vector.len]
 	ret
 
+IntString~new@qword:
+	; IN  rdx val
+	; OUT rax ptr to new IntString(val)
+	mov eax, IntString_size
+	call malloc
+	mov [rax+IntString.vtbl], DWORD IntString~vtable
+	mov [rax+IntString.ref], DWORD 1
+	mov [rax+IntString.val], rdx
+	ret
+
 ; vtables
 BasicString~vtable:
 	.typeInfo   dd 0xdeadbeef
@@ -1260,6 +1270,22 @@ BasicMap~vtable:
 	.intVal     dd 0;BasicMap~intVal
 	.lookup     dd 0;BasicMap~lookup
 	.run        dd 0;BasicMap~run
+
+IntString~vtable:
+	.typeInfo   dd 0x11112222
+	.delete     dd 0;IntString~delete
+	.clone      dd 0;IntString~clone
+	.incRef     dd 0;IntString~incRef
+	.decRef     dd 0;IntString~decRef
+	.clear      dd 0;IntString~clear
+	.length     dd 0;IntString~length
+	.appendChar dd 0;IntString~appendChar
+	.appendNear dd 0;IntString~appendNear
+	.appendFar  dd 0;IntString~appendFar
+	.compare    dd 0;IntString~compare
+	.intVal     dd 0;IntString~intVal
+	.lookup     dd 0;IntString~lookup
+	.run        dd 0;IntString~run
 
 termLR_ctx:
 .consoleX:
