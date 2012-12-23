@@ -10,11 +10,12 @@
 	jmp 0:start
 
 start:
+	; zero seg regs
 	xor ax, ax
 	mov ds, ax
 	mov es, ax
 	mov ss, ax
-	mov sp, 0x7c00
+	mov sp, 0x7c00 ; set stack pointer to match mmap
 
 	; set video mode
 	mov ax, 0x0003 ; mode 3, 80x25 color
