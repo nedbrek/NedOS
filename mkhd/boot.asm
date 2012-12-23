@@ -1,25 +1,8 @@
 ; bootloader
-; memory map
-; 00000..003FF	IDT
-; 00400..004FF BIOS data
-; 00500..07BFF stack (30464 bytes)
-; 07C00..07DFF boot sector
-; 07E00..0FFFF free
-; 10000..1FFFF boot output block
-; 20000..2FFFF GDT+IDT
-; 30000..3FFFF stage 1 page tables
-; 40000..4FFFF memory map
-; 50000..7FFFF free
-; 80000..9FBFF possible BIOS EDA
-; 9FC00..9FFFF definite BIOS EDA
-; A0000..FFFFF ROM
+%include "../mkcd/mmap.asm"
+%include "../mkcd/bob.asm"
 
 ; constants
-BOOT_PARMS  	equ	0x10000 ; information from boot time
-GDT_BASE    	equ	0x20000
-PAGE_BASE   	equ	0x30000
-MMAP_BASE   	equ	0x40000
-
 BIOS_GET_MMAP	equ   0xe820
 BIOS_SET_A20M	equ	0x2401
 
@@ -113,7 +96,7 @@ save_vbe:
 	mov [12], al
 	mov ax, [di+40] ; get lfb
 	mov [16], ax
-	mov ax, [di+42] ; get lfb
+	mov ax, [di+42] ; get high word lfb
 	mov [18], ax
 	mov al, [di]    ; get caps
 	mov [20], al
@@ -129,7 +112,7 @@ next_vbe:
 fun_kzero:
 	; IN seg on stack
 	push ax
-	pop es
+	pop  es
 	xor ax, ax
 	;mov   ax, 0xdead ; testing mem range
 	mov cx, 0x8000
@@ -144,6 +127,7 @@ fun_getMMap:
 	mov edx, ebp ; 'SMAP'
 	mov BYTE [di+20], 1 ; set ACPI 3 valid
 
+	; requires ES:DI to point to out buf, EBX=index, EDX='SMAP', EAX=E820, ECX=24
 	int 0x15
 	ret
 
@@ -160,51 +144,50 @@ done_vbe:
 
 	xor  di, di
 	; save boot disk id
-	mov [di], dx
+	mov [di+Bob.bootDisk], dx
 
-	; get mem map
+get_mem_map:
 	mov ax, (MMAP_BASE >> 4)
 	call fun_kzero
 
 	mov ebp, 'PAMS' ; 'SMAP' little endian
 
 	;; first call is CF==error
-	xor ebx, ebx
-
+	xor  ebx, ebx
 	call fun_getMMap
 
 	test ebx, ebx ; ebx == 0 is done
 	je   doneMap
 
-	jcxz nextMap ; skip zero len entries
+	jcxz .nextMap ; skip zero len entries
 
 	add di, 24 ; advance to next
 
 	; later calls are CF==done
-nextMap:
+.nextMap:
 	call fun_getMMap
-	jc   doneMap
+	jc   doneMap  ; now, carry is done
 	test ebx, ebx ; ebx == 0 is done too
 	je   doneMap
 
-	jcxz nextMap ; skip zero len entries
+	jcxz .nextMap ; skip zero len entries
 
 	; check for extended entry valid
 	test BYTE [di+20], 1
-	jz   nextMap
+	jz   .nextMap
 
 	; test for len==0 (qword from di+8..15)
 	xor  esi, esi
 	test [di+8], esi
-	jnz  incMap
+	jnz  .incMap
 	test [di+12], esi
-	jz   nextMap
+	jz   .nextMap
 
 	; advance to next
-incMap:
+.incMap:
 	add di, 24
 
-	jmp nextMap
+	jmp .nextMap
 
 doneMap:
 
