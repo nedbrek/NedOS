@@ -280,6 +280,19 @@ str_FAIL:
 str_VBE_md_desc:
 	db "Mode wd   ht",0xa,0
 
+fun_kzero:
+	;  IN AX - seg
+	; OUT AX - 0
+	; OUT CX - 0
+	; OUT ES - cleared seg
+	push ax
+	pop  es
+	xor ax, ax
+	;mov   ax, 0xdead ; testing mem range
+	mov cx, 0x8000
+	rep stosw
+	ret
+
 pmode:
 %include "pmode.asm"
 

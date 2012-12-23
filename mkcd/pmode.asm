@@ -11,7 +11,7 @@ PAGE_LEN       equ   0x01000
 	mov ds, ax ; space saver
 	call fun_kzero
 
-	xchg bx,bx ; Bochs magic debug break 
+	xchg bx,bx ; Bochs magic debug break
 
 	; entry0 - null segment
 	; entry1 - code segment
