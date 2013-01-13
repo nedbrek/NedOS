@@ -1,9 +1,16 @@
-.PHONY: all
+.PHONY: all clean
+ASMFLAGS := -w+orphan-labels
 
 all: test.iso
 
+-include DependAsm.Make
+
+DependAsm.Make: boot kernel
+	@nasm $(ASMFLAGS) -M boot.asm > DependAsm.Make
+	@nasm $(ASMFLAGS) -M kernel.asm >> DependAsm.Make
+
 test.iso: os.bin
-	@genisoimage -quiet -o $@ -b os.bin -no-emul-boot -m test.iso .
+	@mkisofs -quiet -o test.iso -b os.bin -no-emul-boot -m test.iso .
 #	@../mkcd/mkcd.exe os.bin
 
 cursor.h: lboot.txt
@@ -17,8 +24,11 @@ kernel.asm: cursor.h
 boot: pmode.asm
 
 %: %.asm
-	@nasm -Ox $<
+	@nasm $(ASMFLAGS) -Ox $<
 
 os.bin: boot kernel
 	@cat $^ > os.bin
+
+clean:
+	@rm -f test.iso boot kernel os.bin cursor.h
 
