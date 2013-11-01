@@ -5,18 +5,19 @@ all: os.bin
 
 -include DependAsm.Make
 
-DependAsm.Make: boot
+DependAsm.Make: boot strap
 	@nasm $(ASMFLAGS) -M boot.asm > DependAsm.Make
-
-lboot.txt: boot.asm
-	@nasm -l lboot.txt boot.asm
+	@nasm $(ASMFLAGS) -M strap.asm >> DependAsm.Make
 
 %: %.asm
 	@nasm $(ASMFLAGS) -Ox $<
 
+stage2.bin: strap
+	@cat $^ > $@
+
 os.bin: boot stage2.bin
-	@cat $^ > os.bin
+	@cat $^ > $@
 
 clean:
-	@rm -f boot os.bin
+	@rm -f boot os.bin stage2.bin
 

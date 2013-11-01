@@ -189,12 +189,6 @@ cursor:
 
 str_hello:
 	db "Hello world",0xa,0
-str_SUCCESS:
-	db "Success",0
-str_FAIL:
-	db "Fail",0
-str_VBE_md_desc:
-	db "Mode wd   ht",0xa,0
 
 disk_address_packet:
 	db 0x10       ; structure size
@@ -206,21 +200,8 @@ disk_address_packet:
 boot_disk:
 	dw 0
 
-fun_kzero:
-	;  IN AX - seg
-	; OUT AX - 0
-	; OUT CX - 0
-	; OUT ES - cleared seg
-	push ax
-	pop  es
-	xor ax, ax
-	;mov   ax, 0xdead ; testing mem range
-	mov cx, 0x8000
-	rep stosw
-	ret
-
 pmode:
-	hlt
+	jmp 0x7e00
 
 times 510-($-$$) db 0
 dw 0xaa55
