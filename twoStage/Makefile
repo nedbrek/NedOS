@@ -15,7 +15,7 @@ DependAsm.Make: boot strap
 stage2.bin: strap
 	@cat $^ > $@
 
-os.bin: boot stage2.bin
+os.bin: boot stage2.bin kernel
 	@cat $^ > $@
 
 clean:

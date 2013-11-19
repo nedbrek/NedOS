@@ -83,10 +83,8 @@ codePE:
 	bts   eax, 31
 	mov   cr0, eax
 
-	jmp 8:.pmode
-
-.pmode:
-	hlt
+	; transfer to kernel
+	jmp 8:0x8000
 
 gdt:
 	dw 1024
