@@ -38,6 +38,33 @@ start:
 	mov rax, cr3
 	mov cr3, rax
 
+	; find ACPI tables (RSDP)
+	;; there is no well known addr, must search for the key
+	mov rax, 'RSD PTR '
+
+	;; look in EBDA
+	movzx edi, WORD [0x40e] ; EBDA paragraph addr
+	shl edi, 4 ; convert to linear
+
+	mov ecx, 0xa0000 ; stop at top of free mem
+	sub ecx, edi ; byte count
+	shr ecx, 3 ; we will scan 8 B per
+
+	cld
+	repne scasq ; search!
+	je acpi_found ; yea!
+
+	;;else look in BIOS high mem
+	mov edi, 0xe_0000
+	mov ecx, (0x10_0000 - 0xe_0000) >> 3
+	repne scasq
+	jne panic ; oh no
+
+acpi_found:
+	; RSDP is at edi-8 (scas leaves things for next)
+	; RSDT is at offset 16
+	mov edi, [rdi-8+16]
+
 	; success, aqua screen of life
 	mov rax, 0x0000_FF00_0000_00FF
 	call fill_screen
@@ -217,6 +244,84 @@ cursorRight:
 .done:
 	mov [rsi+16], ebx
 	mov [rsi+20], ecx
+
+	ret
+
+vputNibble:
+	; IN  rax - color
+	; IN  dl  - value 0-15
+	; IN  esi - context ptr
+	; OUT dl  - ASCII value of dl
+	cmp dl, 9
+	jbe .printLo
+
+	add dl, 'A'-10
+	jmp .done
+
+.printLo:
+	add dl, '0'
+
+.done:
+	call vputc
+	ret
+
+vputByte:
+	; IN  rax - color
+	; IN  dl  - byte
+	; IN  esi - context ptr
+	; OUT dl  - ASCII value of low nibble
+	push rdx
+
+	shr dl, 4
+	call vputNibble
+
+	pop  rdx
+	and dl, 0xf
+	call vputNibble
+
+	ret
+
+vputWord:
+	; IN  rax - color
+	; IN  dx  - word
+	; IN  esi - context ptr
+	; OUT dl  - ASCII value of lowest nibble
+	push rdx
+	shr edx, 8
+	call vputByte
+
+	pop rdx
+	and edx, 0xff
+	call vputByte
+
+	ret
+
+vputDWord:
+	; IN  rax - color
+	; IN  edx - dword
+	; IN  esi - context ptr
+	; OUT dl  - ASCII value of lowest nibble
+	push rdx
+	shr edx, 16
+	call vputWord
+
+	pop rdx
+	and edx, 0xffff
+	call vputWord
+
+	ret
+
+vputQWord:
+	; IN  rax - color
+	; IN  rdx - qword
+	; IN  esi - context ptr
+	; OUT dl  - ASCII value of lowest nibble
+	push rdx
+	shr rdx, 32
+	call vputDWord
+
+	pop rdx
+	call vputDWord
 
 	ret
 
