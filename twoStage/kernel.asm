@@ -65,6 +65,11 @@ acpi_found:
 	; RSDT is at offset 16
 	mov edi, [rdi-8+16]
 
+	;; likely need a new page to get at it
+	;mov eax, edi
+	;mov esi, PAGE_BASE
+	;call add_2M_page
+
 	; success, aqua screen of life
 	mov rax, 0x0000_FF00_0000_00FF
 	call fill_screen
@@ -102,13 +107,19 @@ add_2M_page:
 
 	add esi, eax ; done pd offset
 
-	; build pde
+	; get offset into pd
+	mov eax, edi ; restore eax
+	shr eax, 21  ; bits 21..29
+	and eax, 0x1ff
+	lea esi, [esi + eax*8] ; shift to the proper directory entry
+
+	; build identity pde
 	mov eax, edi ; restore eax
 	and eax, 0xffe0_0000 ; clear low bits
 	or  eax, 0x80|PAGE_PRESENT|PAGE_WRITE|PAGE_SUPER
 	mov [rsi], eax
 
-	mov eax, edi
+	mov eax, edi ; restore eax
 
 	pop rdi
 	ret
