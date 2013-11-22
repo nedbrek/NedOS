@@ -66,9 +66,158 @@ acpi_found:
 	mov edi, [rdi-8+16]
 
 	;; likely need a new page to get at it
-	;mov eax, edi
-	;mov esi, PAGE_BASE
-	;call add_2M_page
+	mov eax, edi
+	mov esi, PAGE_BASE
+	call add_2M_page
+
+	; find IOAPIC
+	mov ebx, 32
+
+.next_tbl:
+	add ebx, 4
+	mov esi, [rdi+rbx]
+	cmp DWORD [rsi], 'APIC'
+	jnz .next_tbl
+
+.found_apic:
+	mov ebx, 44
+
+.next_entry:
+	mov eax, [rsi+rbx]
+	cmp al, 1 ; want IOAPIC
+	je .found_ioapic
+
+	;; add offset
+	shr eax, 8
+	and eax, 0xff
+	add ebx, eax
+	jmp .next_entry
+
+.found_ioapic:
+	mov edi, [rsi+rbx+4]
+
+	;; map it in
+	mov eax, edi
+	mov esi, PAGE_BASE
+	call add_2M_page
+
+	; fill the 16 legacy INT redirects
+	mov ecx, 16
+
+.next_ioredir:
+	dec ecx
+
+	;; access reg[ecx*2+16]
+	mov eax, ecx
+	add eax, eax
+	add eax, 16
+	mov DWORD [rdi], eax
+
+	mov edx, ecx
+	or  edx, 0x0000_a0f0
+	mov DWORD [rdi+16], edx
+
+	test ecx, ecx
+	jnz .next_ioredir
+
+	; disable pic
+	mov al, 0xff
+	out 0xa1, al
+	out 0x21, al
+
+	; disable pit
+	mov al, 0x10
+	out 0x43, al
+
+	; fill IDT
+	;; skip entries 00..EF (for now)
+	mov edi, IDT_BASE+0xF0*16
+
+	;; irq0
+	mov edx, isr_dev_nop
+	xor ecx, ecx
+	call write_isr_to_idt
+
+	;; irq1 (keyboard)
+	mov edx, isr_mouse_keyb
+	inc ecx
+	inc ecx
+	call write_isr_to_idt
+
+	;; irq2
+	mov edx, isr_dev_nop
+	inc ecx
+	inc ecx
+	call write_isr_to_idt
+
+	;; irq3
+	inc ecx
+	inc ecx
+	call write_isr_to_idt
+
+	;; irq4
+	inc ecx
+	inc ecx
+	call write_isr_to_idt
+
+	;; irq5
+	inc ecx
+	inc ecx
+	call write_isr_to_idt
+
+	;; irq6
+	inc ecx
+	inc ecx
+	call write_isr_to_idt
+
+	;; irq7
+	inc ecx
+	inc ecx
+	call write_isr_to_idt
+
+	;; irq8
+	inc ecx
+	inc ecx
+	call write_isr_to_idt
+
+	;; irq9
+	inc ecx
+	inc ecx
+	call write_isr_to_idt
+
+	;; irq10
+	inc ecx
+	inc ecx
+	call write_isr_to_idt
+
+	;; irq11
+	inc ecx
+	inc ecx
+	call write_isr_to_idt
+
+	;; irq12 (mouse)
+	mov edx, isr_dev_nop
+	inc ecx
+	inc ecx
+	call write_isr_to_idt
+
+	;; irq13
+	mov edx, isr_dev_nop
+	inc ecx
+	inc ecx
+	call write_isr_to_idt
+
+	;; irq14
+	inc ecx
+	inc ecx
+	call write_isr_to_idt
+
+	;; irq15
+	inc ecx
+	inc ecx
+	call write_isr_to_idt
+
+	lidt [idt]
 
 	; success, aqua screen of life
 	mov rax, 0x0000_FF00_0000_00FF
@@ -85,6 +234,62 @@ acpi_found:
 	call vputs
 
 	hlt
+
+; data
+idt:
+	dw 4095
+	dq IDT_BASE
+
+; functions
+isr_dev_nop:
+	; empty interrupt handler for devices
+	push rax
+	mov rax, 0xfee0_00b0
+	mov DWORD [rax], 0 ; write EOI
+	pop rax
+	iretq
+
+isr_mouse_keyb:
+	; interrupt handler for mouse and keyboard
+	push rax
+
+	; get the status and data bytes
+	xor eax, eax
+
+	; status, bit 0 tells ready
+	in   al, 0x64
+	test al, 1
+	jz   .end ; not ready, spurious int
+
+	; insert at end of input queue
+	;; check for overflow
+	push rdi
+
+	;;; if slot occupied
+	mov  edi, [BOOT_PARMS+QUEUE_END]
+	test BYTE [rdi*2+BOOT_PARMS+INPUT_QUEUE+1], 1
+	jnz  panic
+
+	;; get the next byte
+	mov  ah, al
+	in   al, 0x60
+
+	;; do the write
+	mov [rdi*2+BOOT_PARMS+INPUT_QUEUE], ax
+
+	;; update the end of queue pointer
+	inc edi
+	and edi, 0xfff
+	mov [BOOT_PARMS+QUEUE_END], edi
+
+	pop rdi
+
+.end:
+	mov rax, 0xfee0_00b0
+	mov DWORD [rax], 0 ; write EOI
+
+	pop rax
+	iretq
 
 add_2M_page:
 	; IN  eax - vaddr to add a page for
@@ -438,6 +643,36 @@ fill_screen:
 	mov edi, [BOOT_PARMS+Bob.vgaLFBP]
 	rep stosq
 
+	ret
+
+write_isr_to_idt:
+	; IN  edx - address of isr
+	; IN  rdi - address of idt
+	; IN  ecx - vector number * 2
+	; OUT eax - IDT value
+	push rdx
+
+	mov eax, edx
+
+	; save low bits of &isr
+	and edx, 0xffff
+	bts edx, 19 ; set for code segment 8 (entry 1 in GDT)
+
+	; build a 64 bit IDT entry
+	;; bits [31:16] are the high bits of &isr
+	;; bits [16:00] are the properties
+	mov  ax, 0x8e01 ; present, ring 0, INT, IST=1
+
+	;; move bits [31:0] up to [63:32]
+	shl rax, 32
+
+	;; bring in low bits
+	or  rax, rdx
+
+	; write the IDT
+	mov [rdi+rcx*8], rax
+
+	pop  rdx
 	ret
 
 panic:
