@@ -130,6 +130,11 @@ acpi_found:
 	out 0x43, al
 
 	; fill IDT
+	xor ecx, ecx
+	mov edi, IDT_BASE+8*16
+	mov edx, isr_panic
+	call write_isr_to_idt
+
 	;; skip entries 00..EF (for now)
 	mov edi, IDT_BASE+0xF0*16
 
@@ -263,7 +268,7 @@ acpi_found:
 	mov edi, 0xfee0_00f0
 	mov DWORD [rdi], 0x100 ; write SVR
 
-	;sti
+	sti
 
 	; success, aqua screen of life
 	mov rax, 0x0000_FF00_0000_00FF
@@ -289,6 +294,9 @@ idt:
 	dq IDT_BASE
 
 ; functions
+isr_panic:
+	jmp panic
+
 isr_dev_nop:
 	; empty interrupt handler for devices
 	push rax
