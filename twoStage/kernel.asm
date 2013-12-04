@@ -378,7 +378,9 @@ acpi_found:
 	mov dl, 10
 	call vputc
 
+.done:
 	hlt
+	jmp .done
 
 ; data
 idt:
