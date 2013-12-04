@@ -131,11 +131,103 @@ acpi_found:
 
 	; fill IDT
 	xor ecx, ecx
-	mov edi, IDT_BASE+8*16
+	mov edi, IDT_BASE
+
+	;; INT0 divide error
+	mov edx, isr_print0
+	call write_isr_to_idt
+
+	;; INT1 reserved
+	inc ecx
+	inc ecx
 	mov edx, isr_panic
 	call write_isr_to_idt
 
-	;; skip entries 00..EF (for now)
+	;; INT2 NMI
+	inc ecx
+	inc ecx
+	mov edx, isr_print2
+	call write_isr_to_idt
+
+	;; INT3 breakpoint
+	inc ecx
+	inc ecx
+	mov edx, isr_print3
+	call write_isr_to_idt
+
+	;; INT4 overflow
+	inc ecx
+	inc ecx
+	mov edx, isr_print4
+	call write_isr_to_idt
+
+	;; INT5 bound
+	inc ecx
+	inc ecx
+	mov edx, isr_print5
+	call write_isr_to_idt
+
+	;; INT6 invalid opcode
+	inc ecx
+	inc ecx
+	mov edx, isr_print6
+	call write_isr_to_idt
+
+	;; INT7 math coprocessor not present
+	inc ecx
+	inc ecx
+	mov edx, isr_print7
+	call write_isr_to_idt
+
+	;; INT8 double fault
+	inc ecx
+	inc ecx
+	mov edx, isr_panic
+	call write_isr_to_idt
+
+	;; INT9 coprocessor seg fault
+	inc ecx
+	inc ecx
+	mov edx, isr_print9
+	call write_isr_to_idt
+
+	;; INT10 invalid TSS
+	inc ecx
+	inc ecx
+	mov edx, isr_print10
+	call write_isr_to_idt
+
+	;; INT11 seg fault
+	inc ecx
+	inc ecx
+	mov edx, isr_print11
+	call write_isr_to_idt
+
+	;; INT12 stack seg fault
+	inc ecx
+	inc ecx
+	mov edx, isr_print12
+	call write_isr_to_idt
+
+	;; INT13 general protection fault
+	inc ecx
+	inc ecx
+	mov edx, isr_print13
+	call write_isr_to_idt
+
+	;; INT14 page fault
+	inc ecx
+	inc ecx
+	mov edx, isr_print14
+	call write_isr_to_idt
+
+	;; INT15 reserved
+	inc ecx
+	inc ecx
+	mov edx, isr_panic
+	call write_isr_to_idt
+
+	;; skip entries 10..EF (for now)
 	mov edi, IDT_BASE+0xF0*16
 
 	;; irq0
@@ -294,6 +386,115 @@ idt:
 	dq IDT_BASE
 
 ; functions
+isr_print:
+	mov esi, termLR_ctx
+	mov eax, 0xffff_ffff
+	call vputByte
+
+.done:
+	hlt
+	jmp .done
+
+isr_print0:
+	mov dl, 0
+	jmp isr_print
+
+isr_print1:
+	mov dl, 1
+	jmp isr_print
+
+isr_print2:
+	mov dl, 2
+	jmp isr_print
+
+isr_print3:
+	mov dl, 3
+	jmp isr_print
+
+isr_print4:
+	mov dl, 4
+	jmp isr_print
+
+isr_print5:
+	mov dl, 5
+	jmp isr_print
+
+isr_print6:
+	mov dl, 6
+	jmp isr_print
+
+isr_print7:
+	mov dl, 7
+	jmp isr_print
+
+isr_print8:
+	mov dl, 8
+	jmp isr_print
+
+isr_print9:
+	mov dl, 9
+	jmp isr_print
+
+isr_print10:
+	mov dl, 10
+	jmp isr_print
+
+isr_print11:
+	mov dl, 11
+	jmp isr_print
+
+isr_print12:
+	mov dl, 12
+	jmp isr_print
+
+isr_print13:
+	mov dl, 13
+	jmp isr_print
+
+; page fault
+isr_print14:
+	mov esi, termLR_ctx
+	mov eax, 0xffff_ffff
+	xor edx, edx
+
+	mov dl, 14
+	call vputByte
+	mov dl, 10
+	call vputc
+
+	;; error code
+	mov edx, [rsp]
+	call vputDWord
+	mov edx, 10
+	call vputc
+
+	;; EIP of faulting instruction
+	mov edx, [rsp+8]
+	call vputDWord
+	mov edx, 10
+	call vputc
+
+	;; CS of faulting instruction
+	mov edx, [rsp+16]
+	call vputDWord
+	mov edx, 10
+	call vputc
+
+	;; faulting address
+	mov rax, cr2
+	mov rdx, rax
+	call vputQWord
+	mov edx, 10
+	call vputc
+
+.done:
+	hlt
+	jmp .done
+
+isr_print15:
+	mov dl, 15
+	jmp isr_print
+
 isr_panic:
 	jmp panic
 
