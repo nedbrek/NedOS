@@ -372,14 +372,43 @@ acpi_found:
 	xor eax, eax ; pixel color
 	call fill_term
 
-	mov eax, 0xffff_ffff
-	mov edx, hello_str
-	call vputs
-	mov dl, 10
-	call vputc
+	; TODO install RAM
+	mov QWORD [BOOT_PARMS+Bob.freeList], 1024*1024 ; freeList = 1M
+	mov QWORD [1024*1024], 0 ; no next ptr
+	mov QWORD [1024*1024+8], 1024*1024 ; size = 1M
+
+	; allocate command buffer
+	mov eax, 512
+	call BasicString~new@int
+
+	xor ebp, ebp
 
 .done:
-	hlt
+	; print key codes
+	mov edi, [BOOT_PARMS+QUEUE_START]
+.wait:
+	test BYTE [rdi*2+BOOT_PARMS+INPUT_QUEUE+1], 1
+	jz .wait
+
+	;; get the code
+	movzx eax, BYTE [rdi*2+BOOT_PARMS+INPUT_QUEUE]
+
+	;; clear the buffer
+	mov  WORD [rdi*2+BOOT_PARMS+INPUT_QUEUE], 0
+
+	;; move along
+	inc edi
+	and edi, 0xfff
+	mov [BOOT_PARMS+QUEUE_START], edi
+
+	;; skip break codes
+	test al, 0x80
+	jnz .wait
+
+	;; actually print
+	mov edx, eax
+	mov eax, 0xffff_ffff
+	call vputByte
 	jmp .done
 
 ; data
@@ -587,6 +616,56 @@ add_2M_page:
 
 	pop rdi
 	ret
+
+malloc:
+   ; IN  eax - size (don't malloc more than 4GB!)
+   ; OUT rax - addr of block
+   push rdi
+   push rsi
+   push rcx
+
+   mov  rsi, [BOOT_PARMS+Bob.freeList]
+   mov  rdi, [rsi+8] ; block size
+   cmp  rdi, rax
+   jb   .next_block
+
+   mov  rcx, rax
+   mov  rax, rsi
+
+   sub  rdi, rcx ; shrink size
+   add  rsi, rcx ; shift head
+
+   mov rcx, [rax] ; move next block ptr
+   mov [rsi], rcx
+
+   mov [rsi+8], rdi ; update size
+
+   mov [BOOT_PARMS+Bob.freeList], rsi ; update free list
+
+   jmp .end
+
+.next_block: ; Ned, implement
+   xor eax, eax ; return NULL for now
+
+.end:
+   pop  rcx
+   pop  rsi
+   pop  rdi
+   ret
+
+free:
+   ; IN rax - address of free block
+   ; IN ecx - size of block (see malloc about 4GB)
+   push rdi
+
+   mov rdi, [BOOT_PARMS+Bob.freeList]
+   mov [rax], rdi
+   mov [rax+8], rcx
+
+   mov [BOOT_PARMS+Bob.freeList], rax
+
+   pop  rdi
+   ret
 
 drawChar:
 	; IN  rdx - pattern to draw
@@ -946,6 +1025,37 @@ panic:
 	hlt
 	jmp .die
 
+Vector~init@int:
+   ; IN  eax - initial buffer size
+   ; IN  ecx - this
+   ; trashed eax
+   mov DWORD [rcx+Vector.len], 0
+   mov [rcx+Vector.cap], eax
+
+   call malloc
+   mov [rcx+Vector.ary], rax
+   ret
+
+BasicString~new@int:
+   ; IN  eax - initial buffer size
+   ; OUT rax - ptr to string
+   ; OUT r9  - also a ptr to string
+   push rax
+
+   mov  eax, BasicString_size
+   call malloc
+   mov  r9, rax
+   mov DWORD [rax+BasicString.vtbl], 0
+   mov DWORD [rax+BasicString.ref], 1
+
+   lea  rcx, [rax+BasicString.vec]
+   pop  rax
+
+   call Vector~init@int
+
+   mov rax, r9
+   ret
+
 termLR_ctx:
 .consoleX:
 	dd 480; console x pos (px)
@@ -962,6 +1072,9 @@ termLR_ctx:
 
 hello_str:
 	db "Hello world", 0
+
+keymap:
+%include "../mkcd/keymap.asm"
 
 font6x10:
 %include "../mkcd/font.asm"
