@@ -385,21 +385,21 @@ acpi_found:
 
 .done:
 	; print key codes
-	mov edi, [BOOT_PARMS+QUEUE_START]
+	mov edi, [QUEUE_START]
 .wait:
-	test BYTE [rdi*2+BOOT_PARMS+INPUT_QUEUE+1], 1
+	test BYTE [rdi*2+INPUT_QUEUE+1], 1
 	jz .wait
 
 	;; get the code
-	movzx eax, BYTE [rdi*2+BOOT_PARMS+INPUT_QUEUE]
+	movzx eax, BYTE [rdi*2+INPUT_QUEUE]
 
 	;; clear the buffer
-	mov  WORD [rdi*2+BOOT_PARMS+INPUT_QUEUE], 0
+	mov  WORD [rdi*2+INPUT_QUEUE], 0
 
 	;; move along
 	inc edi
 	and edi, 0xfff
-	mov [BOOT_PARMS+QUEUE_START], edi
+	mov [QUEUE_START], edi
 
 	;; skip break codes
 	test al, 0x80
@@ -554,8 +554,8 @@ isr_mouse_keyb:
 	push rdi
 
 	;;; if slot occupied
-	mov  edi, [BOOT_PARMS+QUEUE_END]
-	test BYTE [rdi*2+BOOT_PARMS+INPUT_QUEUE+1], 1
+	mov  edi, [QUEUE_END]
+	test BYTE [rdi*2+INPUT_QUEUE+1], 1
 	jnz  panic
 
 	;; get the next byte
@@ -563,12 +563,12 @@ isr_mouse_keyb:
 	in   al, 0x60
 
 	;; do the write
-	mov [rdi*2+BOOT_PARMS+INPUT_QUEUE], ax
+	mov [rdi*2+INPUT_QUEUE], ax
 
 	;; update the end of queue pointer
 	inc edi
 	and edi, 0xfff
-	mov [BOOT_PARMS+QUEUE_END], edi
+	mov [QUEUE_END], edi
 
 	pop rdi
 
