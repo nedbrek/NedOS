@@ -12,6 +12,13 @@ PAGE_LEN       equ   0x01000
 	bits 64
 
 start:
+	; enable caches
+	mov rax, cr0
+	btr eax, 30
+	btr eax, 29
+	mov cr0, rax
+	wbinvd
+
 	; update page tables
 	mov esi, PAGE_BASE
 
@@ -26,12 +33,15 @@ start:
 	;; install VRAM pages
 	;;; get the video mem base
 	mov eax, [BOOT_PARMS+Bob.vgaLFBP]
-	;Ned set WC
+	;;; set WC (memory type UC-, PAT=2)
+	xor edx, edx
+	mov dl, 0x10 ; set PCD=1, PWT=0
 	call add_2M_page
 	;;; leaves rsi with address of pde
 
-	;;; need two for 4 MB VRAM
-	add eax, 0x20_0000 |0x80|PAGE_PRESENT|PAGE_WRITE|PAGE_SUPER
+	;;; need two for 4 MB VRAM (also UC-)
+	and eax, 0xffe0_0000 ; clear low bits
+	add eax, 0x20_0010 |0x80|PAGE_PRESENT|PAGE_WRITE|PAGE_SUPER
 	mov [rsi+8], eax
 
 	;; flush TLB
@@ -68,6 +78,7 @@ acpi_found:
 	;; likely need a new page to get at it
 	mov eax, edi
 	mov esi, PAGE_BASE
+	xor edx, edx
 	call add_2M_page
 
 	; find IOAPIC
@@ -99,6 +110,7 @@ acpi_found:
 	;; map it in
 	mov eax, edi
 	mov esi, PAGE_BASE
+	xor edx, edx
 	call add_2M_page
 
 	; fill the 16 legacy INT redirects
@@ -354,6 +366,8 @@ acpi_found:
 	; add a pte for the EOI
 	mov eax, 0xfee0_0000
 	mov esi, PAGE_BASE
+	xor edx, edx
+	mov dl, 0x18 ; UC page
 	call add_2M_page
 
 	; enable APIC
@@ -382,6 +396,7 @@ acpi_found:
 	call BasicString~new@int
 
 	xor ebp, ebp
+	sfence
 
 .done:
 	; print key codes
@@ -409,6 +424,7 @@ acpi_found:
 	mov edx, eax
 	mov eax, 0xffff_ffff
 	call vputByte
+	sfence
 	jmp .done
 
 ; data
@@ -582,9 +598,11 @@ isr_mouse_keyb:
 add_2M_page:
 	; IN  eax - vaddr to add a page for
 	; IN  esi - start of page table (CR3)
+	; IN  edx - additional flags
 	; OUT esi - addr of pde
-	push rdi
 
+	; save incoming eax
+	push rdi
 	mov edi, eax
 
 	; make esi point to proper pd
@@ -600,7 +618,7 @@ add_2M_page:
 
 	add esi, eax ; done pd offset
 
-	; get offset into pd
+	; get offset into pd (eax[29:21])
 	mov eax, edi ; restore eax
 	shr eax, 21  ; bits 21..29
 	and eax, 0x1ff
@@ -610,6 +628,7 @@ add_2M_page:
 	mov eax, edi ; restore eax
 	and eax, 0xffe0_0000 ; clear low bits
 	or  eax, 0x80|PAGE_PRESENT|PAGE_WRITE|PAGE_SUPER
+	or  eax, edx
 	mov [rsi], eax
 
 	mov eax, edi ; restore eax
