@@ -114,23 +114,18 @@ acpi_found:
 	mov dl, 0x18 ; UC page
 	call add_2M_page
 
+program_ioapic:
 	; fill the 16 legacy INT redirects
 	mov ecx, 16
+	xor edx, edx
 
 .next_ioredir:
 	dec ecx
-
-	;; access reg[ecx*2+16]
-	mov eax, ecx
-	add eax, eax
-	add eax, 16
-	mov DWORD [rdi], eax
-
-	mov edx, ecx
-	or  edx, 0x0000_a0f0
-	mov DWORD [rdi+16], edx
-
-	test ecx, ecx
+	mov dh, [ioapic_flags+rcx]
+	mov dl, cl
+	or  dl, 0xf0
+	call write_ioredir
+	test cl, cl
 	jnz .next_ioredir
 
 	; disable pic
@@ -433,6 +428,25 @@ idt:
 	dw 4095
 	dq IDT_BASE
 
+ioapic_flags:
+	; edge / level, high / low (ready to poke)
+	db 00 ; IRQ 0
+	db 00 ; IRQ 1
+	db 00 ; IRQ 2
+	db 00 ; IRQ 3
+	db 00 ; IRQ 4
+	db 00 ; IRQ 5
+	db 00 ; IRQ 6
+	db 00 ; IRQ 7
+	db 00 ; IRQ 8
+	db 00 ; IRQ 9
+	db 00 ; IRQ 10
+	db 00 ; IRQ 11
+	db 00 ; IRQ 12
+	db 00 ; IRQ 13
+	db 00 ; IRQ 14
+	db 00 ; IRQ 15
+
 ; functions
 isr_print:
 	mov esi, termLR_ctx
@@ -442,6 +456,20 @@ isr_print:
 .done:
 	hlt
 	jmp .done
+
+write_ioredir:
+	; IN  ecx redir reg
+	; IN  edx value
+	; IN  edi IOAPIC space
+	; OUT eax trash
+	;; access reg[ecx*2+16]
+	mov eax, ecx
+	add eax, eax
+	add eax, 16
+	mov DWORD [rdi], eax
+
+	mov [rdi+16], edx
+	ret
 
 isr_print0:
 	mov dl, 0
