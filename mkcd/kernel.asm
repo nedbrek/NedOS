@@ -14,13 +14,20 @@ PAGE_LEN       equ   0x01000
 ; - screen resolution has been set via VBE, info in the BOB
 ; - memmap (INT15) info is in the BOB
 	org 0x7e00
-
 	bits 64
+
+start:
+	; enable caches
+	mov rax, cr0
+	btr eax, 30
+	btr eax, 29
+	mov cr0, rax
+	wbinvd
 
 	; update page tables
 	mov esi, PAGE_BASE
 
-	;; install pds for 1..2, 2..3 and 3..4 G
+	;; install pds for 1..2, 2..3, and 3..4 G
 	mov [rsi+PAGE_LEN+1*8], DWORD ((PAGE_BASE + 3*PAGE_LEN) \
 	                 |PAGE_PRESENT|PAGE_WRITE|PAGE_SUPER)
 	mov [rsi+PAGE_LEN+2*8], DWORD ((PAGE_BASE + 4*PAGE_LEN) \
@@ -31,12 +38,15 @@ PAGE_LEN       equ   0x01000
 	;; install VRAM pages
 	;;; get the video mem base
 	mov  eax, [BOOT_PARMS+Bob.vgaLFBP]
-	;Ned set WC
+	;;; set WC (memory type UC-, PAT=2)
+	xor edx, edx
+	mov dl, 0x10 ; set PCD=1, PWT=0
 	call add_2M_page
 	;;; leaves rsi with address of pde
 
-	;;; need two for 4 MB VRAM
-	add eax, 0x20_0000 |0x80|PAGE_PRESENT|PAGE_WRITE|PAGE_SUPER
+	;;; need two for 4 MB VRAM (also UC-)
+	and eax, 0xffe0_0000 ; clear low bits
+	add eax, 0x20_0010 |0x80|PAGE_PRESENT|PAGE_WRITE|PAGE_SUPER
 	mov [rsi+8], eax
 
 	;; flush TLB
@@ -73,6 +83,7 @@ acpi_found:
 	;; likely need a new page to get at it
 	mov eax, edi
 	mov esi, PAGE_BASE
+	xor edx, edx
 	call add_2M_page
 
 	; find IOAPIC
@@ -104,25 +115,22 @@ acpi_found:
 	;; map it in
 	mov eax, edi
 	mov esi, PAGE_BASE
+	xor edx, edx
+	mov dl, 0x18 ; UC page
 	call add_2M_page
 
+program_ioapic:
 	; fill the 16 legacy INT redirects
 	mov ecx, 16
+	xor edx, edx
 
 .next_ioredir:
 	dec ecx
-
-	;; access reg[ecx*2+16]
-	mov eax, ecx
-	add eax, eax
-	add eax, 16
-	mov DWORD [rdi], eax
-
-	mov edx, ecx
-	or  edx, 0x0000_a0f0
-	mov DWORD [rdi+16], edx
-
-	test ecx, ecx
+	mov dh, [ioapic_flags+rcx]
+	mov dl, cl
+	or  dl, 0xf0
+	call write_ioredir
+	test cl, cl
 	jnz .next_ioredir
 
 	; disable pic
@@ -262,6 +270,8 @@ acpi_found:
 	; add a pte for the EOI
 	mov eax, 0xfee0_0000
 	mov esi, PAGE_BASE
+	xor edx, edx
+	mov dl, 0x18 ; UC page
 	call add_2M_page
 
 	; enable APIC
@@ -277,8 +287,9 @@ acpi_found:
 	; clear a terminal box
 	mov esi, termLR_ctx
 
-	xor eax, eax    ; pixel color
+	xor eax, eax ; pixel color
 	call fill_term
+	sfence
 
 check_memmap:
 	mov edi, MMAP_BASE-24
@@ -299,6 +310,7 @@ check_memmap:
 
 .done:
 
+	; allocate command buffer
 	mov eax, 512
 	call BasicString~new@int
 	mov r9, rax
@@ -334,29 +346,30 @@ check_keyboard:
 	; esi - term ctxt
 	; ebp - count
 	xor ebx, ebx ; escape flag
-	mov edi, [BOOT_PARMS+QUEUE_START]
+	mov edi, [QUEUE_START]
 
 .wait:
-	test BYTE [rdi*2+BOOT_PARMS+INPUT_QUEUE+1], 1
+	test BYTE [rdi*2+INPUT_QUEUE+1], 1
 	jz .wait
 
-	; get the code
-	xor eax, eax
-	mov  al, [rdi*2+BOOT_PARMS+INPUT_QUEUE]
+	;; get the code
+	xor  eax, eax
+	mov  al, [rdi*2+INPUT_QUEUE]
 
-	; clear the buffer
-	mov  WORD [rdi*2+BOOT_PARMS+INPUT_QUEUE], 0
+	;; clear the buffer
+	mov  WORD [rdi*2+INPUT_QUEUE], 0
 
-	; move along
+	;; move along
 	inc edi
 	and edi, 0xfff
-	mov [BOOT_PARMS+QUEUE_START], edi
+	mov [QUEUE_START], edi
 
 	cmp  al, 0xe0 ; escape code
 	jz .escape_start
 
+	;; skip break codes
 	test al, 0x80
-	jnz  check_keyboard ; skip break codes
+	jnz  check_keyboard
 
 	; if escape code
 	test  bl, bl
@@ -474,9 +487,53 @@ check_keyboard:
 	jmp runCmd
 	; end
 
+; data
 idt:
 	dw 4095
 	dq IDT_BASE
+
+ioapic_flags:
+	; edge / level, high / low (ready to poke)
+	db 00 ; IRQ 0
+	db 00 ; IRQ 1
+	db 00 ; IRQ 2
+	db 00 ; IRQ 3
+	db 00 ; IRQ 4
+	db 00 ; IRQ 5
+	db 00 ; IRQ 6
+	db 00 ; IRQ 7
+	db 00 ; IRQ 8
+	db 00 ; IRQ 9
+	db 00 ; IRQ 10
+	db 00 ; IRQ 11
+	db 00 ; IRQ 12
+	db 00 ; IRQ 13
+	db 00 ; IRQ 14
+	db 00 ; IRQ 15
+
+; functions
+isr_print:
+	mov esi, termLR_ctx
+	mov eax, 0xffff_ffff
+	call vputByte
+
+.done:
+	hlt
+	jmp .done
+
+write_ioredir:
+	; IN  ecx redir reg
+	; IN  edx value
+	; IN  edi IOAPIC space
+	; OUT eax trash
+	;; access reg[ecx*2+16]
+	mov eax, ecx
+	add eax, eax
+	add eax, 16
+	mov DWORD [rdi], eax
+
+	mov [rdi+16], edx
+	ret
 
 isr_dev_nop:
 	; empty interrupt handler for devices
@@ -503,8 +560,8 @@ isr_mouse_keyb:
 	push rdi
 
 	;;; if slot occupied
-	mov  edi, [BOOT_PARMS+QUEUE_END]
-	test BYTE [rdi*2+BOOT_PARMS+INPUT_QUEUE+1], 1
+	mov  edi, [QUEUE_END]
+	test BYTE [rdi*2+INPUT_QUEUE+1], 1
 	jnz  panic
 
 	;; get the next byte
@@ -512,12 +569,12 @@ isr_mouse_keyb:
 	in   al, 0x60
 
 	;; do the write
-	mov [rdi*2+BOOT_PARMS+INPUT_QUEUE], ax
+	mov [rdi*2+INPUT_QUEUE], ax
 
 	;; update the end of queue pointer
 	inc edi
 	and edi, 0xfff
-	mov [BOOT_PARMS+QUEUE_END], edi
+	mov [QUEUE_END], edi
 
 	pop rdi
 
@@ -570,41 +627,43 @@ pci_read4:
 	ret
 
 add_2M_page:
-	; IN eax - vaddr to add a page for
-	; IN esi - start of page table (CR3)
+	; IN  eax - vaddr to add a page for
+	; IN  esi - start of page table (CR3)
+	; IN  edx - additional flags
 	; OUT esi - addr of pde
-	push rdi
 
+	; save incoming eax
+	push rdi
 	mov edi, eax
 
-	;;; find top two bits (pd offset)
+	; make esi point to proper pd
+	;; find top two bits (pd offset)
 	shr eax, 30
 
-	;;; add two for pd offset
+	;; add two for pd offset
 	inc eax ; shift past PML4
 	inc eax ; shift past pdp
 
-	;;; multiply by PAGE_LEN
+	;; multiply by PAGE_LEN
 	shl eax, 12
 
 	add esi, eax ; done pd offset
 
-	;;; get pde (bits 29..21)
-	mov eax, edi
-	shr eax, 21
+	; get offset into pd (eax[29:21])
+	mov eax, edi ; restore eax
+	shr eax, 21 ; bits 21..29
 	and eax, 0x1ff
+	lea esi, [esi + eax*8] ; shift to the proper directory entry
 
-	shl eax, 3 ; scale for pde size
-
-	add esi, eax ; add pde offset
-
-	;;; build pde
-	mov eax, edi
-	and eax, 0xffe0_0000
+	; build identity pde
+	mov eax, edi ; restore eax
+	and eax, 0xffe0_0000 ; clear low bits
 	or  eax, 0x80|PAGE_PRESENT|PAGE_WRITE|PAGE_SUPER
+	or  eax, edx
 	mov [rsi], eax
 
-	mov eax, edi
+	mov eax, edi ; restore eax
+
 	pop rdi
 	ret
 
@@ -787,6 +846,7 @@ fill_row:
 
 drawChar:
 	; IN  rdx - pattern to draw
+	; IN  rsi - terminal context
 	; OUT rdx - 0
 	push rbp
 	push rdi
@@ -857,7 +917,7 @@ drawChar:
 vputc:
 	; IN  rax - color (high bits bg)
 	; IN  rdx - char code
-	; IN  esi - context ptr
+	; IN  rsi - terminal context ptr
 	; OUT edx - zero
 	push rbp
 	push rdi
@@ -999,7 +1059,7 @@ vputQWord:
 vputs:
 	; IN  rax - color (high bits will be bg, not implemented)
 	; IN  rdx - char*
-	; IN  esi - context ptr
+	; IN  rsi - terminal context ptr
 	; OUT rdx - end of string
 
 .nextc:
@@ -1041,33 +1101,33 @@ fill_term:
 	ret
 
 fill_rect:
-	; IN eax - pixel to fill
-	; IN ecx - width in pixels
-	; IN edi - y coord (bytes)
-	; IN edx - x coord (bytes, ie. col*4)
-	; IN ebx - height
+	; IN  eax - pixel to fill
+	; IN  ecx - width in pixels
+	; IN  edi - y coord (bytes)
+	; IN  edx - x coord (bytes, ie. col*4)
+	; IN  ebx - height
 	; OUT ebx - zero
 	; OUT edi - end of filled block in LFB
 
 	push rsi
-	;; save width
+	; save width
 	push rcx
 
-	;; get screen width
+	; get screen width
 	mov esi, [BOOT_PARMS+Bob.vgaWidth]
 
-	;; scale y coord by screen width
+	; scale y coord by screen width
 	imul edi, esi
 
-	;; subtract the row width
+	; subtract the row width
 	sub esi, ecx
-	;; scale to pixels
+	; scale to pixels
 	shl esi, 2
 
-	;; add x coord
+	; add x coord
 	add  edi, edx
 
-	;; add to lfb base
+	; add to lfb base
 	add  edi, [BOOT_PARMS+Bob.vgaLFBP]
 
 .fill_row:
@@ -1085,7 +1145,7 @@ fill_rect:
 	ret
 
 fill_screen:
-	; IN rax - color to fill
+	; IN  rax - color to fill
 	; OUT rdx - screen width
 	; OUT rcx - 0
 	; OUT rdi - end of screen mem
@@ -1096,7 +1156,8 @@ fill_screen:
 
 	;; write
 	mov  edi, [BOOT_PARMS+Bob.vgaLFBP]
-	rep stosq
+	rep  stosq
+
 	ret
 
 write_isr_to_idt:
@@ -1137,9 +1198,9 @@ panic:
 	call fill_screen
 
 	; loop forever
-die:
+.die:
 	inc rax
-	jmp die
+	jmp .die
 
 Vector~init@int:
 	; IN  eax - initial buffer size
@@ -1155,7 +1216,7 @@ Vector~init@int:
 BasicString~new@int:
 	; IN  eax - initial buffer size
 	; OUT rax - ptr to string
-	; trashed r9
+	; OUT r9  - also a ptr to string
 	push rax
 
 	mov  eax, BasicString_size

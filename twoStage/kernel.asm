@@ -8,6 +8,11 @@ PAGE_SUPER     equ   4
 
 PAGE_LEN       equ   0x01000
 
+; Start
+; Boot loader places us two blocks down (1024 B)
+; - we are in 64 bit mode, with limited page tables and interrupts off
+; - screen resolution has been set via VBE, info in the BOB
+; - memmap (INT15) info is in the BOB
 	org 0x8000
 	bits 64
 
@@ -32,7 +37,7 @@ start:
 
 	;; install VRAM pages
 	;;; get the video mem base
-	mov eax, [BOOT_PARMS+Bob.vgaLFBP]
+	mov  eax, [BOOT_PARMS+Bob.vgaLFBP]
 	;;; set WC (memory type UC-, PAT=2)
 	xor edx, edx
 	mov dl, 0x10 ; set PCD=1, PWT=0
@@ -373,7 +378,7 @@ program_ioapic:
 	sti
 
 	; success, aqua screen of life
-	mov rax, 0x0000_FF00_0000_00FF
+	mov  rax, 0x0000_FF00_0000_00FF
 	call fill_screen
 
 	; clear a terminal box
@@ -381,6 +386,7 @@ program_ioapic:
 
 	xor eax, eax ; pixel color
 	call fill_term
+	sfence
 
 	; TODO install RAM
 	mov QWORD [BOOT_PARMS+Bob.freeList], 1024*1024 ; freeList = 1M
@@ -392,17 +398,18 @@ program_ioapic:
 	call BasicString~new@int
 
 	xor ebp, ebp
-	sfence
 
 .done:
 	; print key codes
 	mov edi, [QUEUE_START]
+
 .wait:
 	test BYTE [rdi*2+INPUT_QUEUE+1], 1
 	jz .wait
 
 	;; get the code
-	movzx eax, BYTE [rdi*2+INPUT_QUEUE]
+	xor  eax, eax
+	mov  al, [rdi*2+INPUT_QUEUE]
 
 	;; clear the buffer
 	mov  WORD [rdi*2+INPUT_QUEUE], 0
@@ -422,6 +429,7 @@ program_ioapic:
 	call vputByte
 	sfence
 	jmp .done
+	; end
 
 ; data
 idt:
@@ -635,7 +643,7 @@ add_2M_page:
 	mov edi, eax
 
 	; make esi point to proper pd
-	;; find top two bits
+	;; find top two bits (pd offset)
 	shr eax, 30
 
 	;; add two for pd offset
@@ -649,7 +657,7 @@ add_2M_page:
 
 	; get offset into pd (eax[29:21])
 	mov eax, edi ; restore eax
-	shr eax, 21  ; bits 21..29
+	shr eax, 21 ; bits 21..29
 	and eax, 0x1ff
 	lea esi, [esi + eax*8] ; shift to the proper directory entry
 
@@ -666,54 +674,54 @@ add_2M_page:
 	ret
 
 malloc:
-   ; IN  eax - size (don't malloc more than 4GB!)
-   ; OUT rax - addr of block
-   push rdi
-   push rsi
-   push rcx
+	; IN  eax - size (don't malloc more than 4GB!)
+	; OUT rax - addr of block
+	push rdi
+	push rsi
+	push rcx
 
-   mov  rsi, [BOOT_PARMS+Bob.freeList]
-   mov  rdi, [rsi+8] ; block size
-   cmp  rdi, rax
-   jb   .next_block
+	mov  rsi, [BOOT_PARMS+Bob.freeList]
+	mov  rdi, [rsi+8] ; block size
+	cmp  rdi, rax
+	jb   .next_block
 
-   mov  rcx, rax
-   mov  rax, rsi
+	mov  rcx, rax
+	mov  rax, rsi
 
-   sub  rdi, rcx ; shrink size
-   add  rsi, rcx ; shift head
+	sub  rdi, rcx ; shrink size
+	add  rsi, rcx ; shift head
 
-   mov rcx, [rax] ; move next block ptr
-   mov [rsi], rcx
+	mov rcx, [rax] ; move next block ptr
+	mov [rsi], rcx
 
-   mov [rsi+8], rdi ; update size
+	mov [rsi+8], rdi ; update size
 
-   mov [BOOT_PARMS+Bob.freeList], rsi ; update free list
+	mov [BOOT_PARMS+Bob.freeList], rsi ; update free list
 
-   jmp .end
+	jmp .end
 
 .next_block: ; Ned, implement
-   xor eax, eax ; return NULL for now
+	xor eax, eax ; return NULL for now
 
 .end:
-   pop  rcx
-   pop  rsi
-   pop  rdi
-   ret
+	pop  rcx
+	pop  rsi
+	pop  rdi
+	ret
 
 free:
-   ; IN rax - address of free block
-   ; IN ecx - size of block (see malloc about 4GB)
-   push rdi
+	; IN rax - address of free block
+	; IN ecx - size of block (see malloc about 4GB)
+	push rdi
 
-   mov rdi, [BOOT_PARMS+Bob.freeList]
-   mov [rax], rdi
-   mov [rax+8], rcx
+	mov rdi, [BOOT_PARMS+Bob.freeList]
+	mov [rax], rdi
+	mov [rax+8], rcx
 
-   mov [BOOT_PARMS+Bob.freeList], rax
+	mov [BOOT_PARMS+Bob.freeList], rax
 
-   pop  rdi
-   ret
+	pop  rdi
+	ret
 
 drawChar:
 	; IN  rdx - pattern to draw
@@ -1020,14 +1028,14 @@ fill_screen:
 	; OUT rdx - screen width
 	; OUT rcx - 0
 	; OUT rdi - end of screen mem
-	mov edx, [BOOT_PARMS+Bob.vgaWidth]
-	mov ecx, [BOOT_PARMS+Bob.vgaHeight]
+	mov  edx, [BOOT_PARMS+Bob.vgaWidth]
+	mov  ecx, [BOOT_PARMS+Bob.vgaHeight]
 	imul ecx, edx
-	shr ecx, 1 ; we will write 2 pixels per
+	shr  ecx, 1 ; we will write 2 pixels per
 
 	;; write
-	mov edi, [BOOT_PARMS+Bob.vgaLFBP]
-	rep stosq
+	mov  edi, [BOOT_PARMS+Bob.vgaLFBP]
+	rep  stosq
 
 	ret
 
@@ -1065,7 +1073,7 @@ panic:
 	; stack may be trashed
 	mov rsp, 0x7c00
 	; show red screen of death
-	mov rax, 0x00FF_0000_00FF_0000
+	mov  rax, 0x00FF_0000_00FF_0000
 	call fill_screen
 
 	; loop forever
@@ -1074,49 +1082,49 @@ panic:
 	jmp .die
 
 Vector~init@int:
-   ; IN  eax - initial buffer size
-   ; IN  ecx - this
-   ; trashed eax
-   mov DWORD [rcx+Vector.len], 0
-   mov [rcx+Vector.cap], eax
+	; IN  eax - initial buffer size
+	; IN  ecx - this
+	; trashed eax
+	mov DWORD [rcx+Vector.len], 0
+	mov [rcx+Vector.cap], eax
 
-   call malloc
-   mov [rcx+Vector.ary], rax
-   ret
+	call malloc
+	mov [rcx+Vector.ary], rax
+	ret
 
 BasicString~new@int:
-   ; IN  eax - initial buffer size
-   ; OUT rax - ptr to string
-   ; OUT r9  - also a ptr to string
-   push rax
+	; IN  eax - initial buffer size
+	; OUT rax - ptr to string
+	; OUT r9  - also a ptr to string
+	push rax
 
-   mov  eax, BasicString_size
-   call malloc
-   mov  r9, rax
-   mov DWORD [rax+BasicString.vtbl], 0
-   mov DWORD [rax+BasicString.ref], 1
+	mov  eax, BasicString_size
+	call malloc
+	mov  r9, rax
+	mov DWORD [rax+BasicString.vtbl], 0
+	mov DWORD [rax+BasicString.ref], 1
 
-   lea  rcx, [rax+BasicString.vec]
-   pop  rax
+	lea  rcx, [rax+BasicString.vec]
+	pop  rax
 
-   call Vector~init@int
+	call Vector~init@int
 
-   mov rax, r9
-   ret
+	mov rax, r9
+	ret
 
 termLR_ctx:
 .consoleX:
-	dd 480; console x pos (px)
+	dd 480 ; console x pos (px)
 .consoleY:
 	dd 500 ; console y pos (px)
 .width:
-	dd 80 ; width (chars)
+	dd  80 ; width (chars)
 .height:
-	dd 25 ; height (chars)
+	dd  25 ; height (chars)
 .cursorX:
-	dd 0 ; cursor X (chars)
+	dd   0 ; cursor X (chars)
 .cursorY:
-	dd 0 ; cursor Y (chars)
+	dd   0 ; cursor Y (chars)
 
 hello_str:
 	db "Hello world", 0
