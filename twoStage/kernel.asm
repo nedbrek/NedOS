@@ -111,6 +111,7 @@ acpi_found:
 	mov eax, edi
 	mov esi, PAGE_BASE
 	xor edx, edx
+	mov dl, 0x18 ; UC page
 	call add_2M_page
 
 	; fill the 16 legacy INT redirects
