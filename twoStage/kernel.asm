@@ -12,6 +12,13 @@ PAGE_LEN       equ   0x01000
 	bits 64
 
 start:
+	; enable caches
+	mov rax, cr0
+	btr eax, 30
+	btr eax, 29
+	mov cr0, rax
+	wbinvd
+
 	; update page tables
 	mov esi, PAGE_BASE
 
@@ -26,12 +33,15 @@ start:
 	;; install VRAM pages
 	;;; get the video mem base
 	mov eax, [BOOT_PARMS+Bob.vgaLFBP]
-	;Ned set WC
+	;;; set WC (memory type UC-, PAT=2)
+	xor edx, edx
+	mov dl, 0x10 ; set PCD=1, PWT=0
 	call add_2M_page
 	;;; leaves rsi with address of pde
 
-	;;; need two for 4 MB VRAM
-	add eax, 0x20_0000 |0x80|PAGE_PRESENT|PAGE_WRITE|PAGE_SUPER
+	;;; need two for 4 MB VRAM (also UC-)
+	and eax, 0xffe0_0000 ; clear low bits
+	add eax, 0x20_0010 |0x80|PAGE_PRESENT|PAGE_WRITE|PAGE_SUPER
 	mov [rsi+8], eax
 
 	;; flush TLB
@@ -68,6 +78,7 @@ acpi_found:
 	;; likely need a new page to get at it
 	mov eax, edi
 	mov esi, PAGE_BASE
+	xor edx, edx
 	call add_2M_page
 
 	; find IOAPIC
@@ -99,25 +110,22 @@ acpi_found:
 	;; map it in
 	mov eax, edi
 	mov esi, PAGE_BASE
+	xor edx, edx
+	mov dl, 0x18 ; UC page
 	call add_2M_page
 
+program_ioapic:
 	; fill the 16 legacy INT redirects
 	mov ecx, 16
+	xor edx, edx
 
 .next_ioredir:
 	dec ecx
-
-	;; access reg[ecx*2+16]
-	mov eax, ecx
-	add eax, eax
-	add eax, 16
-	mov DWORD [rdi], eax
-
-	mov edx, ecx
-	or  edx, 0x0000_a0f0
-	mov DWORD [rdi+16], edx
-
-	test ecx, ecx
+	mov dh, [ioapic_flags+rcx]
+	mov dl, cl
+	or  dl, 0xf0
+	call write_ioredir
+	test cl, cl
 	jnz .next_ioredir
 
 	; disable pic
@@ -354,6 +362,8 @@ acpi_found:
 	; add a pte for the EOI
 	mov eax, 0xfee0_0000
 	mov esi, PAGE_BASE
+	xor edx, edx
+	mov dl, 0x18 ; UC page
 	call add_2M_page
 
 	; enable APIC
@@ -372,20 +382,70 @@ acpi_found:
 	xor eax, eax ; pixel color
 	call fill_term
 
-	mov eax, 0xffff_ffff
-	mov edx, hello_str
-	call vputs
-	mov dl, 10
-	call vputc
+	; TODO install RAM
+	mov QWORD [BOOT_PARMS+Bob.freeList], 1024*1024 ; freeList = 1M
+	mov QWORD [1024*1024], 0 ; no next ptr
+	mov QWORD [1024*1024+8], 1024*1024 ; size = 1M
+
+	; allocate command buffer
+	mov eax, 512
+	call BasicString~new@int
+
+	xor ebp, ebp
+	sfence
 
 .done:
-	hlt
+	; print key codes
+	mov edi, [QUEUE_START]
+.wait:
+	test BYTE [rdi*2+INPUT_QUEUE+1], 1
+	jz .wait
+
+	;; get the code
+	movzx eax, BYTE [rdi*2+INPUT_QUEUE]
+
+	;; clear the buffer
+	mov  WORD [rdi*2+INPUT_QUEUE], 0
+
+	;; move along
+	inc edi
+	and edi, 0xfff
+	mov [QUEUE_START], edi
+
+	;; skip break codes
+	test al, 0x80
+	jnz .wait
+
+	;; actually print
+	mov edx, eax
+	mov eax, 0xffff_ffff
+	call vputByte
+	sfence
 	jmp .done
 
 ; data
 idt:
 	dw 4095
 	dq IDT_BASE
+
+ioapic_flags:
+	; edge / level, high / low (ready to poke)
+	db 00 ; IRQ 0
+	db 00 ; IRQ 1
+	db 00 ; IRQ 2
+	db 00 ; IRQ 3
+	db 00 ; IRQ 4
+	db 00 ; IRQ 5
+	db 00 ; IRQ 6
+	db 00 ; IRQ 7
+	db 00 ; IRQ 8
+	db 00 ; IRQ 9
+	db 00 ; IRQ 10
+	db 00 ; IRQ 11
+	db 00 ; IRQ 12
+	db 00 ; IRQ 13
+	db 00 ; IRQ 14
+	db 00 ; IRQ 15
 
 ; functions
 isr_print:
@@ -396,6 +456,20 @@ isr_print:
 .done:
 	hlt
 	jmp .done
+
+write_ioredir:
+	; IN  ecx redir reg
+	; IN  edx value
+	; IN  edi IOAPIC space
+	; OUT eax trash
+	;; access reg[ecx*2+16]
+	mov eax, ecx
+	add eax, eax
+	add eax, 16
+	mov DWORD [rdi], eax
+
+	mov [rdi+16], edx
+	ret
 
 isr_print0:
 	mov dl, 0
@@ -525,8 +599,8 @@ isr_mouse_keyb:
 	push rdi
 
 	;;; if slot occupied
-	mov  edi, [BOOT_PARMS+QUEUE_END]
-	test BYTE [rdi*2+BOOT_PARMS+INPUT_QUEUE+1], 1
+	mov  edi, [QUEUE_END]
+	test BYTE [rdi*2+INPUT_QUEUE+1], 1
 	jnz  panic
 
 	;; get the next byte
@@ -534,12 +608,12 @@ isr_mouse_keyb:
 	in   al, 0x60
 
 	;; do the write
-	mov [rdi*2+BOOT_PARMS+INPUT_QUEUE], ax
+	mov [rdi*2+INPUT_QUEUE], ax
 
 	;; update the end of queue pointer
 	inc edi
 	and edi, 0xfff
-	mov [BOOT_PARMS+QUEUE_END], edi
+	mov [QUEUE_END], edi
 
 	pop rdi
 
@@ -553,9 +627,11 @@ isr_mouse_keyb:
 add_2M_page:
 	; IN  eax - vaddr to add a page for
 	; IN  esi - start of page table (CR3)
+	; IN  edx - additional flags
 	; OUT esi - addr of pde
-	push rdi
 
+	; save incoming eax
+	push rdi
 	mov edi, eax
 
 	; make esi point to proper pd
@@ -571,7 +647,7 @@ add_2M_page:
 
 	add esi, eax ; done pd offset
 
-	; get offset into pd
+	; get offset into pd (eax[29:21])
 	mov eax, edi ; restore eax
 	shr eax, 21  ; bits 21..29
 	and eax, 0x1ff
@@ -581,12 +657,63 @@ add_2M_page:
 	mov eax, edi ; restore eax
 	and eax, 0xffe0_0000 ; clear low bits
 	or  eax, 0x80|PAGE_PRESENT|PAGE_WRITE|PAGE_SUPER
+	or  eax, edx
 	mov [rsi], eax
 
 	mov eax, edi ; restore eax
 
 	pop rdi
 	ret
+
+malloc:
+   ; IN  eax - size (don't malloc more than 4GB!)
+   ; OUT rax - addr of block
+   push rdi
+   push rsi
+   push rcx
+
+   mov  rsi, [BOOT_PARMS+Bob.freeList]
+   mov  rdi, [rsi+8] ; block size
+   cmp  rdi, rax
+   jb   .next_block
+
+   mov  rcx, rax
+   mov  rax, rsi
+
+   sub  rdi, rcx ; shrink size
+   add  rsi, rcx ; shift head
+
+   mov rcx, [rax] ; move next block ptr
+   mov [rsi], rcx
+
+   mov [rsi+8], rdi ; update size
+
+   mov [BOOT_PARMS+Bob.freeList], rsi ; update free list
+
+   jmp .end
+
+.next_block: ; Ned, implement
+   xor eax, eax ; return NULL for now
+
+.end:
+   pop  rcx
+   pop  rsi
+   pop  rdi
+   ret
+
+free:
+   ; IN rax - address of free block
+   ; IN ecx - size of block (see malloc about 4GB)
+   push rdi
+
+   mov rdi, [BOOT_PARMS+Bob.freeList]
+   mov [rax], rdi
+   mov [rax+8], rcx
+
+   mov [BOOT_PARMS+Bob.freeList], rax
+
+   pop  rdi
+   ret
 
 drawChar:
 	; IN  rdx - pattern to draw
@@ -946,6 +1073,37 @@ panic:
 	hlt
 	jmp .die
 
+Vector~init@int:
+   ; IN  eax - initial buffer size
+   ; IN  ecx - this
+   ; trashed eax
+   mov DWORD [rcx+Vector.len], 0
+   mov [rcx+Vector.cap], eax
+
+   call malloc
+   mov [rcx+Vector.ary], rax
+   ret
+
+BasicString~new@int:
+   ; IN  eax - initial buffer size
+   ; OUT rax - ptr to string
+   ; OUT r9  - also a ptr to string
+   push rax
+
+   mov  eax, BasicString_size
+   call malloc
+   mov  r9, rax
+   mov DWORD [rax+BasicString.vtbl], 0
+   mov DWORD [rax+BasicString.ref], 1
+
+   lea  rcx, [rax+BasicString.vec]
+   pop  rax
+
+   call Vector~init@int
+
+   mov rax, r9
+   ret
+
 termLR_ctx:
 .consoleX:
 	dd 480; console x pos (px)
@@ -962,6 +1120,9 @@ termLR_ctx:
 
 hello_str:
 	db "Hello world", 0
+
+keymap:
+%include "../mkcd/keymap.asm"
 
 font6x10:
 %include "../mkcd/font.asm"

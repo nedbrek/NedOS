@@ -4,4 +4,6 @@
 /os.bin
 /stage2.bin
 /strap
+/bochs.img
+/zeros.bin
 
