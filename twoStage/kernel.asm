@@ -412,14 +412,36 @@ check_memmap:
 	call BasicString~new@int
 
 	mov esi, termLR_ctx
-	xor ebp, ebp
 
 runCmd:
 	; print prompt
-	; TODO
+	mov eax, 0xffff_ffff
+	xor edx, edx
+	mov dl, '%'
+	call vputc
 
-.done:
-	; print key codes
+	mov dl, ' '
+	call vputc
+
+	xor rax, rax
+	mov ecx, INPUT_QUEUE_SIZE >> 3
+	mov edi, INPUT_QUEUE
+	rep stosq
+
+	mov ecx, r9d
+	call BasicString~clear
+
+	xor ebp, ebp
+
+check_keyboard:
+	; eax - scratch
+	; ebx - escape flag
+	; ecx - command buffer this
+	; edx - char tmp
+	; edi - queue ptr
+	; esi - term ctxt
+	; ebp - count
+	xor ebx, ebx ; escape flag
 	mov edi, [QUEUE_START]
 
 .wait:
@@ -438,16 +460,131 @@ runCmd:
 	and edi, 0xfff
 	mov [QUEUE_START], edi
 
+	cmp  al, 0xe0 ; escape code
+	jz .escape_start
+
 	;; skip break codes
 	test al, 0x80
-	jnz .wait
+	jnz  check_keyboard
 
-	;; actually print
-	mov edx, eax
+	; if escape code
+	test bl, bl
+	jnz  .escape_code ; handle it
+
+	jmp .print ; else, just print
+
+.escape_start:
+	inc ebx ; set escape flag
+
+	jmp .wait ; fetch next code
+
+.escape_code:
+	; check for funky codes
+	cmp al, 0x2a ; fake LShift
+	jz check_keyboard
+
+	cmp al, 0x36 ; fake RShift
+	jz check_keyboard
+
+	cmp al, 0x37 ; Ctrl+PrintScreen
+	jz check_keyboard
+
+	cmp al, 0x46 ; Ctrl+Break
+	jz check_keyboard
+
+.print:
+	xor edx, edx
+	mov dl, [keymap+rax] ; map from scan code to ASCII
+
+	cmp dl, 10 ; check for new line
+	jz .doRunCmd
+
+	cmp dl, 0x1a ; left arrow
+	jz .larrow
+
+	cmp dl, 32 ; check for unprintable
+	jb check_keyboard
+
+	cmp dl, 127 ; DEL
+	jz check_keyboard
+
+	jmp .actual_print
+
+.larrow:
+	; decrement position
+	;; check for position 0
+	test ebp, ebp
+	jz   check_keyboard
+
+	;; shift pointer
+	dec ebp
+
+	; update cursor
+	push rax
+
+	mov  eax, [rsi+TermContext.cursorX]
+	test eax, eax
+	jz .decRow
+
+	dec eax
+	mov [rsi+TermContext.cursorX], eax
+
+	jmp .larrow_done
+
+.decRow:
+	; BUGFIX Ned, adjust to maxX
+	xor eax, eax
+	mov [rsi+TermContext.cursorX], eax
+	mov eax, [rsi+TermContext.cursorY]
+	; TODO Ned, handle scrollback
+	dec eax
+	mov [rsi+TermContext.cursorY], eax
+
+.larrow_done:
+	pop  rax
+
+	jmp check_keyboard
+
+.actual_print:
+	mov ecx, r9d
+	cmp ebp, [rcx+BasicString.vec+Vector.len]
+	jae .append
+
+	; buffer ptr
+	mov eax, [rcx+BasicString.vec+Vector.ary]
+
+	; overwrite current spot
+	mov [rax+rbp], dl
+	mov rdx, 0x0fff_ffff_ffff_ffff
+	xor eax, eax
+	call drawChar
+
+	; restore char
+	xor edx, edx
+	mov eax, [rcx+BasicString.vec+Vector.ary]
+	mov dl, [rax+rbp]
+
+	jmp .final_print
+
+.append:
+	call BasicString~appendChar
+
+.final_print:
 	mov eax, 0xffff_ffff
-	call vputByte
+	call vputc
 	sfence
-	jmp .done
+
+	inc ebp ; bump count
+	jmp check_keyboard
+
+.doRunCmd:
+	; print the eol
+	xor eax, eax
+	call vputc
+
+	; TODO Ned, process command
+
+	jmp runCmd
 	; end
 
 ; data
@@ -1239,6 +1376,46 @@ BasicString~new@int:
 	call Vector~init@int
 
 	mov rax, r9
+	ret
+
+BasicString~appendChar: ;Ned? make into Vector~push_back?
+	; IN  rdx - char (TODO Ned, support UTF-8)
+	; IN  rcx - this
+	push rsi
+	push rdi
+
+	; get length
+	mov esi, [rcx+BasicString.vec+Vector.len]
+	; check for overflow
+	cmp esi, [rcx+BasicString.vec+Vector.cap]
+	jae .end ; TODO Ned, add vector growth
+
+	; get data array
+	mov rdi, [rcx+BasicString.vec+Vector.ary]
+	; store char to array (TODO UTF-8)
+	mov [rdi+rsi], dl
+
+	; update length
+	inc esi
+	mov [rcx+BasicString.vec+Vector.len], esi
+
+.end:
+	pop  rdi
+	pop  rsi
+	ret
+
+BasicString~clear:
+	; IN  rcx - this
+	push rax
+	xor  rax, rax
+	mov [rcx+BasicString.vec+Vector.len], eax
+	pop  rax
+	ret
+
+BasicString~length:
+	; IN  r15 - this
+	; OUT eax - length
+	mov eax, [r15+BasicString.vec+Vector.len]
 	ret
 
 termLR_ctx:

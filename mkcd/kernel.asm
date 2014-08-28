@@ -372,7 +372,7 @@ check_keyboard:
 	jnz  check_keyboard
 
 	; if escape code
-	test  bl, bl
+	test bl, bl
 	jnz  .escape_code ; handle it
 
 	jmp .print ; else, just print
@@ -415,11 +415,14 @@ check_keyboard:
 	jmp .actual_print
 
 .larrow:
+	; decrement position
+	;; check for position 0
 	test ebp, ebp
-	jz  check_keyboard
+	jz   check_keyboard
 
-	; shift pointer
+	;; shift pointer
 	dec ebp
+
 	; update cursor
 	push rax
 
@@ -473,6 +476,7 @@ check_keyboard:
 .final_print:
 	mov eax, 0xffff_ffff
 	call vputc
+	sfence
 
 	inc ebp ; bump count
 	jmp check_keyboard
@@ -753,7 +757,12 @@ install_ram:
 .install_top:
 	mov esi, PAGE_BASE
 	mov rax, rdx
+
+	; reset rdx for page flags
+	push rdx
+	xor edx, edx
 	call add_2M_page
+	pop rdx
 
 	add rdx, rbx
 	cmp rdx, rcx
@@ -1234,8 +1243,8 @@ BasicString~new@int:
 	ret
 
 BasicString~appendChar: ;Ned? make into Vector~push_back?
-	; IN rdx - char (TODO Ned, support UTF-8)
-	; IN rcx - this
+	; IN  rdx - char (TODO Ned, support UTF-8)
+	; IN  rcx - this
 	push rsi
 	push rdi
 
