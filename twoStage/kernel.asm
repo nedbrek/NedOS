@@ -388,16 +388,35 @@ program_ioapic:
 	call fill_term
 	sfence
 
-	; TODO install RAM
-	mov QWORD [BOOT_PARMS+Bob.freeList], 1024*1024 ; freeList = 1M
-	mov QWORD [1024*1024], 0 ; no next ptr
-	mov QWORD [1024*1024+8], 1024*1024 ; size = 1M
+check_memmap:
+	mov edi, MMAP_BASE-24
+
+.top:
+	add edi, 24
+	mov ebx, [rdi+16] ; mem type
+
+	test ebx, ebx
+	jz .done ; zero -> done
+
+	cmp ebx, 1 ; normal
+	jnz .top
+
+	call install_ram
+
+	jmp .top
+
+.done:
 
 	; allocate command buffer
 	mov eax, 512
 	call BasicString~new@int
 
+	mov esi, termLR_ctx
 	xor ebp, ebp
+
+runCmd:
+	; print prompt
+	; TODO
 
 .done:
 	; print key codes
@@ -671,6 +690,116 @@ add_2M_page:
 	mov eax, edi ; restore eax
 
 	pop rdi
+	ret
+
+install_ram:
+	; IN  rdi - ACPI table entry
+	; IN  esi - term context
+	; IN  eax - print color
+	; OUT rdx - trashed
+	; OUT rbx - trashed
+	; OUT rcx - trashed
+	mov rdx, [rdi] ; load base
+
+	; check for blocks below 1 MB
+	mov ebx, 0x10_0000 ; 1MB
+	cmp rdx, rbx
+	jb .end ; ignore them
+
+	; now we need to handle 1MB-2MB, which is problematic (it is covered by the 1M table)
+	mov ebx, 0x20_0000 ; 2MB
+	cmp rdx, rbx
+	ja .trimBase ; region starts above 2M
+
+	add rdx, [rdi+8] ; size
+	cmp rdx, rbx
+	jbe .end ; region ends at or below 2M
+
+	sub ebx, [rdi]     ; find how much is below 2M
+	sub [rdi+8], rbx   ; remove it from the size of the region
+
+	mov edx, 0x20_0000 ; reset the base
+	mov [rdi], rdx
+	jmp .trimLimit ; base is aligned
+
+.trimBase:
+	; make sure base is aligned to 2M boundary
+	mov ebx, edx
+	mov ecx, 0x1f_ffff
+	and ebx, ecx ; ebx gets low bits
+	jz .trimLimit; no low bits
+
+	; skip to next aligned page
+	inc ecx
+	sub ecx, ebx ; how much are we skipping?
+	add rdx, rcx
+	mov [rdi], rdx
+	sub [rdi+8], rcx ; subtract from size
+
+	; same for limit
+.trimLimit:
+	mov ecx, 0x1f_ffff
+	add rdx, [rdi+8] ; limit = base (rdx) + size
+	dec rdx ; topmost address is 1 short
+	mov ebx, edx
+	and ebx, ecx ; low bits
+	jz .install ; none
+
+	inc ebx
+	sub [rdi+8], rbx ; must drop off ebx from the end
+
+.install:
+	mov esi, termLR_ctx
+	mov eax, 0xffff_ffff
+	mov edx, ram1_str
+	call vputs
+
+	mov rdx, [rdi]
+	mov rcx, rdx
+	call vputQWord
+
+	mov edx, ram2_str
+	call vputs
+
+	mov rdx, [rdi+8]
+	add rcx, rdx ; rcx -> top of mem block
+	mov rdx, rcx
+	call vputQWord
+
+	mov dl, 10
+	call vputc
+
+	mov ebx, 0x20_0000
+	mov rdx, [rdi]
+	cmp rdx, rcx
+	jae .end ; nothing to install
+
+.install_top:
+	mov esi, PAGE_BASE
+	mov rax, rdx
+
+	; reset rdx for page flags
+	push rdx
+	xor edx, edx
+	call add_2M_page
+	pop rdx
+
+	add rdx, rbx
+	cmp rdx, rcx
+	jb .install_top
+
+.finish: ; update free list
+	mov rdx, [rdi] ; get base again
+	cmp rdx, rcx ; make sure there is something
+	jae .end
+
+	mov rcx, [BOOT_PARMS+Bob.freeList] ; head of list (could be NULL)
+	mov [rdx], rcx ; block->next = freeList
+	mov rcx, [rdi+8] ; size
+	mov [rdx+8], rcx ; block->size = size
+	mov [BOOT_PARMS+Bob.freeList], rdx ; freeList = block
+
+.end:
 	ret
 
 malloc:
@@ -1126,8 +1255,11 @@ termLR_ctx:
 .cursorY:
 	dd   0 ; cursor Y (chars)
 
-hello_str:
-	db "Hello world", 0
+ram1_str:
+	db "Usable pages from ",0
+
+ram2_str:
+	db " to ",0
 
 keymap:
 %include "../mkcd/keymap.asm"
