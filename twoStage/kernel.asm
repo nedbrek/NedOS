@@ -788,6 +788,47 @@ isr_mouse_keyb:
 	pop rax
 	iretq
 
+pci_read1:
+	; IN  eax pci addr
+	; OUT eax value
+	; OUT edx 0xcfc
+	xor edx, edx
+	mov dx, 0xcf8
+	out dx, eax
+
+	or  dl, 4
+	xor eax, eax
+	in  al, dx
+
+	ret
+
+pci_read2:
+	; IN  eax pci addr
+	; OUT eax value
+	; OUT edx 0xcfc
+	xor edx, edx
+	mov dx, 0xcf8
+	out dx, eax
+
+	or  dl, 4
+	xor eax, eax
+	in  ax, dx
+
+	ret
+
+pci_read4:
+	; IN  eax pci addr
+	; OUT eax value
+	; OUT edx 0xcfc
+	xor edx, edx
+	mov dx, 0xcf8
+	out dx, eax
+
+	or  dl, 4
+	in  eax, dx
+
+	ret
+
 add_2M_page:
 	; IN  eax - vaddr to add a page for
 	; IN  esi - start of page table (CR3)
@@ -987,6 +1028,27 @@ free:
 	mov [BOOT_PARMS+Bob.freeList], rax
 
 	pop  rdi
+	ret
+
+fill_row:
+	; IN  eax - pixel to fill
+	; IN  rcx - width in pixels
+	; IN  edi - y coord (row num)
+	; IN  edx - x coord (px, ie. col*4)
+	; OUT ecx - 0
+	; OUT edi - pixel after last in row
+
+	;; scale y coord by screen width
+	imul edi, [BOOT_PARMS+Bob.vgaWidth]
+
+	;; add x coord
+	add  edi, edx
+
+	;; add to lfb base
+	add  edi, [BOOT_PARMS+Bob.vgaLFBP]
+
+	rep stosd
+
 	ret
 
 drawChar:
@@ -1417,6 +1479,81 @@ BasicString~length:
 	; OUT eax - length
 	mov eax, [r15+BasicString.vec+Vector.len]
 	ret
+
+IntString~new@qword:
+	; IN  rdx val
+	; OUT rax ptr to new IntString(val)
+	mov eax, IntString_size
+	call malloc
+	mov [rax+IntString.vtbl], DWORD IntString~vtable
+	mov [rax+IntString.ref], DWORD 1
+	mov [rax+IntString.val], rdx
+	ret
+
+; vtables
+BasicString~vtable:
+	.typeInfo   dd 0xdeadbeef
+	.delete     dd 0;BasicString~delete
+	.clone      dd 0;BasicString~clone
+	.incRef     dd 0;BasicString~incRef
+	.decRef     dd 0;BasicString~decRef
+	.clear      dd BasicString~clear
+	.length     dd BasicString~length
+	.appendChar dd BasicString~appendChar
+	.appendNear dd 0;BasicString~appendNear
+	.appendFar  dd 0;BasicString~appendFar
+	.compare    dd 0;BasicString~compare
+	.intVal     dd 0;BasicString~intVal
+	.lookup     dd 0;BasicString~lookup
+	.run        dd 0;BasicString~run
+
+CwrappedStringNear~vtable:
+	.typeInfo   dd 0xbaadf00d
+	.delete     dd 0;CwrappedStringNear~delete
+	.clone      dd 0;CwrappedStringNear~clone
+	.incRef     dd 0;CwrappedStringNear~incRef
+	.decRef     dd 0;CwrappedStringNear~decRef
+	.clear      dd 0;CwrappedStringNear~clear
+	.length     dd 0;CwrappedStringNear~length
+	.appendChar dd 0;CwrappedStringNear~appendChar
+	.appendNear dd 0;CwrappedStringNear~appendNear
+	.appendFar  dd 0;CwrappedStringNear~appendFar
+	.compare    dd 0;CwrappedStringNear~compare
+	.intVal     dd 0;CwrappedStringNear~intVal
+	.lookup     dd 0;CwrappedStringNear~lookup
+	.run        dd 0;CwrappedStringNear~run
+
+BasicMap~vtable:
+	.typeInfo   dd 0xabacdbad
+	.delete     dd 0;BasicMap~delete
+	.clone      dd 0;BasicMap~clone
+	.incRef     dd 0;BasicMap~incRef
+	.decRef     dd 0;BasicMap~decRef
+	.clear      dd 0;BasicMap~clear
+	.length     dd 0;BasicMap~length
+	.appendChar dd 0;BasicMap~appendChar
+	.appendNear dd 0;BasicMap~appendNear
+	.appendFar  dd 0;BasicMap~appendFar
+	.compare    dd 0;BasicMap~compare
+	.intVal     dd 0;BasicMap~intVal
+	.lookup     dd 0;BasicMap~lookup
+	.run        dd 0;BasicMap~run
+
+IntString~vtable:
+	.typeInfo   dd 0x11112222
+	.delete     dd 0;IntString~delete
+	.clone      dd 0;IntString~clone
+	.incRef     dd 0;IntString~incRef
+	.decRef     dd 0;IntString~decRef
+	.clear      dd 0;IntString~clear
+	.length     dd 0;IntString~length
+	.appendChar dd 0;IntString~appendChar
+	.appendNear dd 0;IntString~appendNear
+	.appendFar  dd 0;IntString~appendFar
+	.compare    dd 0;IntString~compare
+	.intVal     dd 0;IntString~intVal
+	.lookup     dd 0;IntString~lookup
+	.run        dd 0;IntString~run
 
 termLR_ctx:
 .consoleX:
