@@ -5,9 +5,10 @@ all: os.bin
 
 -include DependAsm.Make
 
-DependAsm.Make: boot strap
+DependAsm.Make: boot strap kernel
 	@nasm $(ASMFLAGS) -M boot.asm > DependAsm.Make
 	@nasm $(ASMFLAGS) -M strap.asm >> DependAsm.Make
+	@nasm $(ASMFLAGS) -M kernel.asm >> DependAsm.Make
 
 %: %.asm
 	@nasm $(ASMFLAGS) -Ox $<

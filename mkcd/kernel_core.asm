@@ -481,8 +481,11 @@ check_keyboard:
 	cmp dl, 10 ; check for new line
 	jz .doRunCmd
 
+	cmp dl, 8 ; backspace
+	jz .larrow_bs
+
 	cmp dl, 0x1a ; left arrow
-	jz .larrow
+	jz .larrow_bs
 
 	cmp dl, 32 ; check for unprintable
 	jb check_keyboard
@@ -492,7 +495,7 @@ check_keyboard:
 
 	jmp .actual_print
 
-.larrow:
+.larrow_bs:
 	; decrement position
 	;; check for position 0
 	test ebp, ebp
@@ -501,29 +504,16 @@ check_keyboard:
 	;; shift pointer
 	dec ebp
 
-	; update cursor
-	push rax
+	call cursorLeft
 
-	mov  eax, [rsi+TermContext.cursorX]
-	test eax, eax
-	jz .decRow
+	; for backspace, erase current character
+	cmp dl, 8
+	jnz check_keyboard
 
-	dec eax
-	mov [rsi+TermContext.cursorX], eax
-
-	jmp .larrow_done
-
-.decRow:
-	; BUGFIX Ned, adjust to maxX
+	mov rdx, 0x0fff_ffff_ffff_ffff
 	xor eax, eax
-	mov [rsi+TermContext.cursorX], eax
-	mov eax, [rsi+TermContext.cursorY]
-	; TODO Ned, handle scrollback
-	dec eax
-	mov [rsi+TermContext.cursorY], eax
-
-.larrow_done:
-	pop  rax
+	call drawChar
+	sfence
 
 	jmp check_keyboard
 
@@ -1165,6 +1155,35 @@ cursorRight:
 	mov [rsi+16], ebx
 	mov [rsi+20], ecx
 
+	ret
+
+cursorLeft:
+	; IN  - rsi terminal context
+
+	; update cursor
+	push rax
+
+	mov  eax, [rsi+TermContext.cursorX]
+	test eax, eax
+	jz .decRow
+
+	dec eax
+	mov [rsi+TermContext.cursorX], eax
+
+	jmp .larrow_done
+
+.decRow:
+	; BUGFIX Ned, adjust to maxX
+	xor eax, eax
+	mov [rsi+TermContext.cursorX], eax
+
+	mov eax, [rsi+TermContext.cursorY]
+	; TODO Ned, handle scrollback
+	dec eax
+	mov [rsi+TermContext.cursorY], eax
+
+.larrow_done:
+	pop  rax
 	ret
 
 vputNibble:

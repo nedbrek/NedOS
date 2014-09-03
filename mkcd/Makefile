@@ -22,7 +22,7 @@ clean:
 Depend.Make: *.cpp *.h
 	@g++ -MM $^ > Depend.Make
 
-DependAsm.Make: boot.asm kernel.asm
+DependAsm.Make: boot kernel
 	@nasm $(ASMFLAGS) -M boot.asm    > DependAsm.Make
 	@nasm $(ASMFLAGS) -M kernel.asm >> DependAsm.Make
 
