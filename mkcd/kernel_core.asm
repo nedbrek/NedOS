@@ -410,7 +410,6 @@ runCmd:
 	mov edi, INPUT_QUEUE
 	rep stosq
 
-	mov ecx, r9d
 	call BasicString~clear
 
 	xor ebp, ebp
@@ -418,11 +417,11 @@ runCmd:
 check_keyboard:
 	; eax - scratch
 	; ebx - escape flag
-	; ecx - command buffer this
 	; edx - char tmp
 	; edi - queue ptr
 	; esi - term ctxt
 	; ebp - count
+	; r9  - command buffer this
 	xor ebx, ebx ; escape flag
 	mov edi, [QUEUE_START]
 
@@ -518,12 +517,11 @@ check_keyboard:
 	jmp check_keyboard
 
 .actual_print:
-	mov ecx, r9d
-	cmp ebp, [rcx+BasicString.vec+Vector.len]
+	cmp ebp, [r9+BasicString.vec+Vector.len]
 	jae .append
 
 	; buffer ptr
-	mov eax, [rcx+BasicString.vec+Vector.ary]
+	mov eax, [r9+BasicString.vec+Vector.ary]
 
 	; overwrite current spot
 	mov [rax+rbp], dl
@@ -533,7 +531,7 @@ check_keyboard:
 
 	; restore char
 	xor edx, edx
-	mov eax, [rcx+BasicString.vec+Vector.ary]
+	mov eax, [r9+BasicString.vec+Vector.ary]
 	mov dl, [rax+rbp]
 
 	jmp .final_print
@@ -1443,24 +1441,24 @@ BasicString~new@int:
 
 BasicString~appendChar: ;Ned? make into Vector~push_back?
 	; IN  rdx - char (TODO Ned, support UTF-8)
-	; IN  rcx - this
+	; IN  r9  - this
 	push rsi
 	push rdi
 
 	; get length
-	mov esi, [rcx+BasicString.vec+Vector.len]
+	mov esi, [r9+BasicString.vec+Vector.len]
 	; check for overflow
-	cmp esi, [rcx+BasicString.vec+Vector.cap]
+	cmp esi, [r9+BasicString.vec+Vector.cap]
 	jae .end ; TODO Ned, add vector growth
 
 	; get data array
-	mov rdi, [rcx+BasicString.vec+Vector.ary]
+	mov rdi, [r9+BasicString.vec+Vector.ary]
 	; store char to array (TODO UTF-8)
 	mov [rdi+rsi], dl
 
 	; update length
 	inc esi
-	mov [rcx+BasicString.vec+Vector.len], esi
+	mov [r9+BasicString.vec+Vector.len], esi
 
 .end:
 	pop  rdi
@@ -1468,10 +1466,10 @@ BasicString~appendChar: ;Ned? make into Vector~push_back?
 	ret
 
 BasicString~clear:
-	; IN  rcx - this
+	; IN  r9 - this
 	push rax
 	xor  rax, rax
-	mov [rcx+BasicString.vec+Vector.len], eax
+	mov [r9+BasicString.vec+Vector.len], eax
 	pop  rax
 	ret
 
