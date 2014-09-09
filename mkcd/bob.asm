@@ -40,6 +40,14 @@ struc StrVtbl
 	.run: resd 1
 endstruc
 
+struc SubStringNearShort
+	.vtbl:  resd 1
+	.ref:   resd 1
+	.src:   resd 1
+	.start: resw 1
+	.len:   resw 1
+endstruc
+
 struc CwrappedStringNear
 	.vtbl: resd 1
 	.ref:  resd 1

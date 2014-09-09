@@ -393,6 +393,21 @@ check_memmap:
 	mov eax, 512
 	call BasicString~new@int
 
+	mov eax, 8*8 ; eight substring ptr (far)
+	call malloc
+	mov r10, rax
+
+	mov edx, 7
+
+.alloc_parms:
+	xor ebx, ebx
+	xor ecx, ecx
+	call SubStringNearShort~new
+	mov [r10+rdx*8], rax
+
+	dec dl
+	jns .alloc_parms
+
 	mov esi, termLR_ctx
 
 runCmd:
@@ -422,6 +437,7 @@ check_keyboard:
 	; esi - term ctxt
 	; ebp - count
 	; r9  - command buffer this
+	; r10 - base of parameter substring array
 	xor ebx, ebx ; escape flag
 	mov edi, [QUEUE_START]
 
@@ -553,6 +569,7 @@ check_keyboard:
 	call vputc
 
 	; TODO Ned, process command
+	call parseArgs
 
 	jmp runCmd
 	; end
@@ -1366,6 +1383,73 @@ fill_screen:
 
 	ret
 
+parseArgs:
+	; IN  r9  - source string
+	; IN  r10 - base of parameter array
+	; OUT eax - trash
+	; OUT ecx - parameter count
+	push rsi
+	push rdx
+
+	; make rsi the source vector
+	mov rsi, [r9+BasicString.vec+Vector.ary]
+
+	xor ecx, ecx ; parameter count
+	xor rdx, rdx ; char offset into source string
+
+.next_arg:
+	mov rax, [r10+rcx*8] ; rax = substring[ecx]
+	; handle spaces at start
+
+.handle_start_spaces:
+	mov [rax+SubStringNearShort.start], dx ; substring[ecx].start = dx
+
+	; if rdx >= string.length then done
+	cmp edx, [r9+BasicString.vec+Vector.len]
+	jae .done
+
+	cmp BYTE [rsi+rdx], ' '
+	jne .start_arg
+
+	inc edx
+	jmp .handle_start_spaces
+
+.start_arg:
+.next_char:
+	; if rdx >= string.length then done
+	cmp edx, [r9+BasicString.vec+Vector.len]
+	jae .done
+
+	; if string[rdx] == ' ' then done arg
+	cmp BYTE [rsi+rdx], ' '
+	je .done_arg
+
+	inc edx
+	jmp .next_char
+
+.done_arg:
+	; convert end count to length
+	push rdx
+	sub dx, [rax+SubStringNearShort.start]
+	mov [rax+SubStringNearShort.len], dx
+	pop rdx
+
+	inc ecx
+	cmp cl, 7 ; max args
+	jae .done
+	jmp .next_arg
+
+.done:
+	; save last parm
+	mov rax, [r10+rcx*8] ; rax = substring[ecx]
+	sub dx, [rax+SubStringNearShort.start]
+	mov [rax+SubStringNearShort.len], dx
+	inc ecx
+
+	pop rdx
+	pop rsi
+	ret
+
 write_isr_to_idt:
 	; IN  edx - address of isr
 	; IN  rdi - address of idt
@@ -1479,6 +1563,20 @@ BasicString~length:
 	mov eax, [r15+BasicString.vec+Vector.len]
 	ret
 
+SubStringNearShort~new:
+	; IN  r9d - parent string (near)
+	; IN  bx  - short start
+	; IN  cx  - short length
+	; OUT rax - ptr to new
+	mov eax, SubStringNearShort_size
+	call malloc
+	mov [rax+SubStringNearShort.vtbl], DWORD SubStringNearShort~vtable
+	mov [rax+SubStringNearShort.ref], DWORD 1
+	mov [rax+SubStringNearShort.src], r9d
+	mov [rax+SubStringNearShort.start], bx
+	mov [rax+SubStringNearShort.len], cx
+	ret
+
 IntString~new@qword:
 	; IN  rdx val
 	; OUT rax ptr to new IntString(val)
@@ -1505,6 +1603,22 @@ BasicString~vtable:
 	.intVal     dd 0;BasicString~intVal
 	.lookup     dd 0;BasicString~lookup
 	.run        dd 0;BasicString~run
+
+SubStringNearShort~vtable:
+	.typeInfo   dd 0x33334444
+	.delete     dd 0;SubStringNearShort~delete
+	.clone      dd 0;SubStringNearShort~clone
+	.incRef     dd 0;SubStringNearShort~incRef
+	.decRef     dd 0;SubStringNearShort~decRef
+	.clear      dd 0;SubStringNearShort~clear
+	.length     dd 0;SubStringNearShort~length
+	.appendChar dd 0;SubStringNearShort~appendChar
+	.appendNear dd 0;SubStringNearShort~appendNear
+	.appendFar  dd 0;SubStringNearShort~appendFar
+	.compare    dd 0;SubStringNearShort~compare
+	.intVal     dd 0;SubStringNearShort~intVal
+	.lookup     dd 0;SubStringNearShort~lookup
+	.run        dd 0;SubStringNearShort~run
 
 CwrappedStringNear~vtable:
 	.typeInfo   dd 0xbaadf00d
