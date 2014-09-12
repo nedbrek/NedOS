@@ -570,6 +570,29 @@ check_keyboard:
 
 	; TODO Ned, process command
 	call parseArgs
+	cmp cl, 1
+	jb runCmd
+
+	mov rax, [r10] ; rax = SubString[0]
+	mov eax, [rax+SubStringNearShort.src] ; eax = SubString.parent (String*)
+	cmp [rax+BasicString.vec+Vector.len], DWORD 3 ; TODO: use substring length
+	jb runCmd
+
+	mov rsi, [rax+BasicString.vec+Vector.ary]
+	mov eax, [rsi]
+	and eax, 0x00ff_ffff
+	cmp eax, 'pci'
+	jne runCmd
+
+	call cmdPci
+
+	; TODO print command result
+	mov esi, termLR_ctx
+	mov edx, r8d
+	mov eax, 0xffff_ffff
+	call vputDWord
+	mov edx, 10
+	call vputc
 
 	jmp runCmd
 	; end
@@ -815,6 +838,113 @@ pci_read4:
 	in  eax, dx
 
 	ret
+
+cmdPci:
+	; IN  ecx - argc
+	; IN  r10 - argv
+	; OUT eax - return code
+	; OUT r8  - value (TODO: result string)
+	push rsi
+
+	cmp cl, 7
+	jne .error_usage
+
+	; if arg[1].length() < 1 then error
+	mov rax, [r10+1*8] ; rax = argv[1] (SubStringNearShort*) ('read' or 'write')
+	cmp [rax+SubStringNearShort.len], WORD 1
+	jb .error_usage ; TODO: error in arg 1...
+
+	mov esi, [rax+SubStringNearShort.src] ; esi = String* (assume BasicString*)
+
+	mov rsi, [rsi+BasicString.vec+Vector.ary] ; rsi = byte array
+	add si, [rax+SubStringNearShort.start] ; rsi = start of substring
+
+	cmp [rsi], BYTE 'r'
+	je .read
+	cmp [rsi], BYTE 'R'
+	je .read
+	cmp [rsi], BYTE 'w'
+	je .write
+	cmp [rsi], BYTE 'W'
+	je .write
+	;jmp .error_usage ; TODO: error arg 1 not read or write
+
+.error_usage:
+	mov r8d, .errorString
+	inc DWORD [r8+CwrappedStringNear.ref]
+	xor eax, eax
+	inc eax
+	jmp .return
+
+.write:
+	; TODO
+	jmp .return
+
+.read:
+	mov rax, [r10+2*8] ; rax = argv[2] (SubStringNearShort*) (size=1,2,4)
+	cmp [rax+SubStringNearShort.len], WORD 1
+	jb .error_usage ; TODO: error in arg 2...
+
+	push rdx
+
+	mov esi, [rax+SubStringNearShort.src] ; esi = String* (assume BasicString*)
+
+	mov rsi, [rsi+BasicString.vec+Vector.ary] ; rsi = byte array
+	add si, [rax+SubStringNearShort.start] ; rsi = start of substring
+	call .assemble_eax
+
+	cmp [rsi], BYTE '1'
+	je .read1
+	cmp [rsi], BYTE '2'
+	je .read2
+	cmp [rsi], BYTE '4'
+	je .read4
+	; TODO: error on size
+
+.read1:
+	call pci_read1
+	jmp .done_read
+
+.read2:
+	call pci_read2
+	jmp .done_read
+
+.read4:
+	call pci_read4
+	;jmp .done_read
+
+.done_read:
+	; TODO build result string
+	mov r8d, eax
+	pop rdx
+	xor eax, eax
+
+.return:
+	pop rsi
+	ret
+
+	; sub-function: combine bus/dev/fun/reg into eax for pci operation
+.assemble_eax:
+	; IN  r10 - argv
+	; OUT eax - pci cf8 value
+	; TODO
+	mov eax, 0x8000_0000
+	ret
+
+	; define the error string that can be returned
+%define pci_error_text "Usage: pci <read|write> <size> <bus> <device> <fun> <reg>",0
+%strlen pci_error_text_len pci_error_text
+
+.errorString:
+	.vtbl dd CwrappedStringNear~vtable
+	.ref  dd 1
+	.len  dd pci_error_text_len
+	.act  dd .error_text
+
+.error_text:
+	db pci_error_text
+%undef pci_error_text
+%undef pci_error_text_len
 
 add_2M_page:
 	; IN  eax - vaddr to add a page for
@@ -1681,6 +1811,18 @@ termLR_ctx:
 	dd   0 ; cursor X (chars)
 .cursorY:
 	dd   0 ; cursor Y (chars)
+
+cmdMap:
+	dd   1 ; number of commands
+.pci:
+	dd pciCmdStr
+	dd cmdPci
+.end:
+	dd 0
+	dd 0
+
+pciCmdStr:
+	db "pci",0
 
 ram1_str:
 	db "Usable pages from ",0
