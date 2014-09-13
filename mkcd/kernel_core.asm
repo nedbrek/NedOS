@@ -578,8 +578,8 @@ check_keyboard:
 	cmp [rax+BasicString.vec+Vector.len], DWORD 3 ; TODO: use substring length
 	jb runCmd
 
-	mov rsi, [rax+BasicString.vec+Vector.ary]
-	mov eax, [rsi]
+	mov rax, [rax+BasicString.vec+Vector.ary]
+	mov eax, [rax]
 	and eax, 0x00ff_ffff
 	cmp eax, 'pci'
 	jne runCmd
@@ -587,7 +587,6 @@ check_keyboard:
 	call cmdPci
 
 	; TODO print command result
-	mov esi, termLR_ctx
 	mov edx, r8d
 	mov eax, 0xffff_ffff
 	call vputDWord
