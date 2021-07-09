@@ -7,7 +7,6 @@
  */
 struct Bob
 {
-	unsigned boot_disk;
 	unsigned vga_width;
 	unsigned vga_height;
 	unsigned vga_bpp;

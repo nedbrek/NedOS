@@ -4,8 +4,11 @@ all: BOOTX64.EFI
 main.o: main.c
 	@x86_64-w64-mingw32-gcc -ffreestanding -I/usr/include/efi -I/usr/include/efi/x86_64 main.c -c -o main.o
 
-BOOTX64.EFI: main.o
-	@x86_64-w64-mingw32-gcc -nostdlib -Wl,-dll -shared -Wl,--subsystem,10 -e efi_main -o BOOTX64.EFI main.o
+kernel.obj: bob.asm kernel.asm
+	@nasm -f win64 kernel.asm
+
+BOOTX64.EFI: kernel.obj main.o
+	@x86_64-w64-mingw32-gcc -nostdlib -Wl,-dll -shared -Wl,--subsystem,10 -e efi_main -o BOOTX64.EFI $^
 
 floppy.img: BOOTX64.EFI
 	@dd if=/dev/zero of=floppy.img bs=1k count=1440

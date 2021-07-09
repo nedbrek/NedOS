@@ -3,6 +3,8 @@
 #include <efilib.h>
 #include <stdint.h>
 
+extern void kernel_main();
+
 EFI_SYSTEM_TABLE *ST = 0;
 struct Bob bob;
 CHAR16 num_buf[17];
@@ -147,8 +149,10 @@ void dumpVga(EFI_SYSTEM_TABLE *ST)
 			bob.vga_bpp = 32;
 			bob.vga_lfbp = vga_iface->Mode->FrameBufferBase;
 		}
-	}
+	} // foreach video handle
+	ST->BootServices->FreePool(buffer);
 }
+
 
 EFI_STATUS efi_main(EFI_HANDLE image_handle, EFI_SYSTEM_TABLE *system_table)
 {
@@ -157,6 +161,8 @@ EFI_STATUS efi_main(EFI_HANDLE image_handle, EFI_SYSTEM_TABLE *system_table)
 	dumpVga(ST);
 
 	waitForKey(ST);
+
+	kernel_main();
 
 	return 0;
 }
