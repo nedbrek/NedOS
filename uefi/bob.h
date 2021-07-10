@@ -7,13 +7,13 @@
  */
 struct Bob
 {
+	UINT64   vga_lfbp; /* far ptr */
+	UINT64   free_list; /* far ptr, start of free memory */
 	unsigned vga_width;
 	unsigned vga_height;
 	unsigned vga_bpp;
-	unsigned long vga_lfbp; /* near ptr */
 	unsigned vga_caps;
 	unsigned vga_mode;
-	unsigned long free_list; /* far ptr, start of free memory */
 } __attribute__((packed));
 
 #endif

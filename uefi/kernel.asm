@@ -18,7 +18,7 @@ fill_screen:
 	shr  ecx, 1 ; we will write 2 pixels per
 
 	;; write
-	mov  edi, [bob+Bob.vgaLFBP]
+	mov  rdi, [bob+Bob.vgaLFBP]
 	rep  stosq
 
 	ret
