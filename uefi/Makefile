@@ -1,7 +1,7 @@
 .PHONY: all
 all: BOOTX64.EFI
 
-main.o: main.c
+main.o: main.c bob.h
 	@x86_64-w64-mingw32-gcc -ffreestanding -I/usr/include/efi -I/usr/include/efi/x86_64 main.c -c -o main.o
 
 kernel.obj: bob.asm kernel.asm
