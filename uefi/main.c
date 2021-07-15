@@ -9,6 +9,7 @@ EFI_SYSTEM_TABLE *ST = 0;
 struct Bob bob;
 CHAR16 num_buf[17];
 EFI_GUID vga_guid = EFI_GRAPHICS_OUTPUT_PROTOCOL_GUID;
+EFI_GUID acpi_guid = ACPI_20_TABLE_GUID;
 
 void waitForKey(EFI_SYSTEM_TABLE *ST)
 {
@@ -139,7 +140,6 @@ void dumpVga(EFI_SYSTEM_TABLE *ST)
 		ST->ConOut->OutputString(ST->ConOut, num_buf);
 		ST->ConOut->OutputString(ST->ConOut, L"\r\n");
 
-		waitForKey(ST);
 		vga_iface->SetMode(vga_iface, best_mode);
 
 		if (i == 0)
@@ -153,7 +153,7 @@ void dumpVga(EFI_SYSTEM_TABLE *ST)
 	ST->BootServices->FreePool(buffer);
 }
 
-void dumpMem(EFI_SYSTEM_TABLE *ST)
+void dumpMem(EFI_HANDLE image_handle, EFI_SYSTEM_TABLE *ST)
 {
 	UINTN memory_map_size = 0;
 	EFI_MEMORY_DESCRIPTOR memory_map;
@@ -166,8 +166,6 @@ void dumpMem(EFI_SYSTEM_TABLE *ST)
 	unsigned i = 0;
 	unsigned num_desc = 0;
 	unsigned valid = 0;
-	UINT64 total_mem = 0;
-	unsigned num_printed = 0;
 	UINT64 *mem_block = 0;
 
 	status = ST->BootServices->GetMemoryMap(
@@ -213,6 +211,13 @@ void dumpMem(EFI_SYSTEM_TABLE *ST)
 		return;
 	}
 
+	status = ST->BootServices->ExitBootServices(image_handle, map_key);
+	if (EFI_ERROR(status))
+	{
+		ST->ConOut->OutputString(ST->ConOut, L"Failed to exit boot services");
+		return;
+	}
+
 	// pointer arithmetic
 	num_desc = memory_map_size / descriptor_size;
 	for (i = 0; i < num_desc; ++i)
@@ -251,26 +256,48 @@ void dumpMem(EFI_SYSTEM_TABLE *ST)
 			continue;
 
 		// boot services memory cannot be written until after exit
-		//mem_block = (UINT64*)memory_desc->PhysicalStart;
-		//mem_block[0] = bob.free_list;
-		//mem_block[1] = memory_desc->NumberOfPages * 4096;
-		//bob.free_list = (UINT64)mem_block;
-
-		total_mem += memory_desc->NumberOfPages * 4096;
+		mem_block = (UINT64*)memory_desc->PhysicalStart;
+		mem_block[0] = bob.free_list;
+		mem_block[1] = memory_desc->NumberOfPages * 4096;
+		bob.free_list = (UINT64)mem_block;
 	}
-	ST->ConOut->OutputString(ST->ConOut, L"Total mem ");
-	buf64(total_mem);
-	ST->ConOut->OutputString(ST->ConOut, num_buf);
 }
 
 EFI_STATUS efi_main(EFI_HANDLE image_handle, EFI_SYSTEM_TABLE *system_table)
 {
+	unsigned i = 0;
+	UINT32 tmp32;
+	UINT64 tmp64;
+
 	ST = system_table;
 
-	dumpVga(ST);
-	dumpMem(ST);
+	for (i = 0; i < ST->NumberOfTableEntries; ++i)
+	{
+		int j = 0;
+		unsigned match = 1;
 
+		if (ST->ConfigurationTable[i].VendorGuid.Data1 != acpi_guid.Data1)
+			continue;
+
+		if (ST->ConfigurationTable[i].VendorGuid.Data2 != acpi_guid.Data2)
+			continue;
+
+		if (ST->ConfigurationTable[i].VendorGuid.Data3 != acpi_guid.Data3)
+			continue;
+
+		for (j = 0; match && j < 8; ++j)
+		{
+			match = ST->ConfigurationTable[i].VendorGuid.Data4[j] == acpi_guid.Data4[j] ? 1 : 0;
+		}
+		if (!match)
+			continue;
+
+		ST->ConOut->OutputString(ST->ConOut, L"Found ACPI\r\n");
+	}
 	waitForKey(ST);
+
+	dumpVga(ST);
+	dumpMem(image_handle, ST);
 
 	kernel_main();
 
