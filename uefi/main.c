@@ -32,6 +32,13 @@ unsigned char hexChar(unsigned n)
 	return n - 10 + 'A';
 }
 
+void buf8(unsigned n)
+{
+	num_buf[0] = hexChar((n & 0xf0) >> 4);
+	num_buf[1] = hexChar(n & 0x0f);
+	num_buf[2] = 0;
+}
+
 void buf32(unsigned n)
 {
 	unsigned i = 0;
@@ -59,6 +66,20 @@ void buf64(UINT64 n)
 		mask >>= 4;
 	}
 	num_buf[i] = 0;
+}
+
+void puts(EFI_SYSTEM_TABLE *ST, const char *str, unsigned ct)
+{
+	unsigned i = 0;
+	CHAR16 uni_char[2] = {0, 0};
+
+	while (i < ct && *str)
+	{
+		uni_char[0] = *str;
+		ST->ConOut->OutputString(ST->ConOut, &uni_char[0]);
+		++i;
+		++str;
+	}
 }
 
 void dumpVga(EFI_SYSTEM_TABLE *ST)
@@ -263,13 +284,14 @@ void dumpMem(EFI_HANDLE image_handle, EFI_SYSTEM_TABLE *ST)
 	}
 }
 
-EFI_STATUS efi_main(EFI_HANDLE image_handle, EFI_SYSTEM_TABLE *system_table)
+void dumpAcpi(EFI_SYSTEM_TABLE *ST)
 {
 	unsigned i = 0;
 	UINT32 tmp32;
 	UINT64 tmp64;
-
-	ST = system_table;
+	unsigned found_acpi = 0;
+	char *ptr = 0;
+	char *xsdt_entry = 0;
 
 	for (i = 0; i < ST->NumberOfTableEntries; ++i)
 	{
@@ -292,9 +314,112 @@ EFI_STATUS efi_main(EFI_HANDLE image_handle, EFI_SYSTEM_TABLE *system_table)
 		if (!match)
 			continue;
 
-		ST->ConOut->OutputString(ST->ConOut, L"Found ACPI\r\n");
+		found_acpi = 1;
+		ptr = ST->ConfigurationTable[i].VendorTable;
 	}
+
+	if (!found_acpi)
+	{
+		ST->ConOut->OutputString(ST->ConOut, L"Didn't find ACPI!\r\n");
+		waitForKey(ST);
+		return;
+	}
+
+	tmp64 = *(UINT64*)(ptr + 24);
+	if (tmp64 == 0)
+	{
+		ST->ConOut->OutputString(ST->ConOut, L"XSDT pointer is NULL\r\n");
+	}
+	else
+	{
+		UINT32 num_entries = 0;
+
+		// move to XSDT pointer
+		ptr = (char*)tmp64;
+
+		tmp32 = *(UINT32*)(ptr + 4);
+		num_entries = (tmp32 - 36) / 8; // number of entries
+
+		for (i = 0; i < num_entries; ++i)
+		{
+			tmp64 = *(UINT64*)(ptr + 36);
+			xsdt_entry = (char*)tmp64;
+			tmp32 = *(UINT32*)xsdt_entry;
+			if (tmp32 != 0x43495041) // APIC
+			{
+				ptr += 8;
+				continue;
+			}
+			else
+			{
+				UINT32 xsdt_len = *(UINT32*)(xsdt_entry + 4);
+				UINT32 off = 44; // start of aux tables
+
+				bob.lapic = *(UINT32*)(xsdt_entry + 36);
+				bob.apic_flags = *(UINT32*)(xsdt_entry + 40);
+
+				while (off < xsdt_len)
+				{
+					// aux tables have 1 byte type and 1 byte length (variable length)
+					tmp32 = *(UINT8*)(xsdt_entry + off);
+					if (tmp32 == 0) // processor
+					{
+						// TODO check for MP
+					}
+					else if (tmp32 == 1) // IOAPIC
+					{
+						// TODO pull IOAPIC info
+						bob.ioapic   = *(UINT32*)(xsdt_entry + off + 4);
+						bob.irq_base = *(UINT32*)(xsdt_entry + off + 8);
+
+						ST->ConOut->OutputString(ST->ConOut, L"IOAPIC Source: ");
+						buf32(bob.ioapic);
+						ST->ConOut->OutputString(ST->ConOut, num_buf);
+						ST->ConOut->OutputString(ST->ConOut, L" ");
+						buf32(bob.irq_base);
+						ST->ConOut->OutputString(ST->ConOut, num_buf);
+						ST->ConOut->OutputString(ST->ConOut, L"\r\n");
+					}
+					else if (tmp32 == 2) // IRQ remapped
+					{
+						tmp32 = *(UINT8*)(xsdt_entry + off + 3);
+						ST->ConOut->OutputString(ST->ConOut, L"Remap Source: ");
+						buf8(tmp32);
+						ST->ConOut->OutputString(ST->ConOut, num_buf);
+						ST->ConOut->OutputString(ST->ConOut, L" ");
+						tmp32 = *(UINT32*)(xsdt_entry + off + 4);
+						buf32(tmp32);
+						ST->ConOut->OutputString(ST->ConOut, num_buf);
+						ST->ConOut->OutputString(ST->ConOut, L"\r\n");
+					}
+					else if (tmp32 == 4) // NMI
+					{
+						// TODO?
+					}
+					else
+					{
+						buf8(tmp32);
+						ST->ConOut->OutputString(ST->ConOut, num_buf);
+						ST->ConOut->OutputString(ST->ConOut, L"\r\n");
+					}
+
+					tmp32 = *(UINT8*)(xsdt_entry + off + 1);
+					off += tmp32;
+				}
+			}
+
+			ptr += 8;
+		}
+	}
+
 	waitForKey(ST);
+}
+
+EFI_STATUS efi_main(EFI_HANDLE image_handle, EFI_SYSTEM_TABLE *system_table)
+{
+	ST = system_table;
+
+	dumpAcpi(ST);
 
 	dumpVga(ST);
 	dumpMem(image_handle, ST);

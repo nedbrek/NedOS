@@ -14,6 +14,10 @@ struct Bob
 	unsigned vga_bpp;
 	unsigned vga_caps;
 	unsigned vga_mode;
+	unsigned lapic;
+	unsigned apic_flags;
+	unsigned ioapic;
+	unsigned irq_base;
 } __attribute__((packed));
 
 #endif
