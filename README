@@ -14,10 +14,15 @@ http://wiki.osdev.org/Main_Page
 
 I use Bochs for testing the os image (see the OSDev Bochs page).
 
+`apt-get install bochs` probably won't be enough.
+You'll probably need: bochs-x, bochsbios, vgabios
+When you first run bochs, make sure to enable a 64 bit CPU, and set CD
+boot (and save the config)
+
 To build:
-cd mkcd
-make run
-cp test.iso <bochs area>
+- cd mkcd
+- make
+- cp test.iso <bochs area>
 
 I use Bochs magic instructions (xchg bx,bx) for debugging.  You should use them
 too.  You will need to continue several times to reach the end (jmp end).
