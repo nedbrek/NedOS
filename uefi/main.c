@@ -7,24 +7,26 @@ extern void kernel_main();
 
 EFI_SYSTEM_TABLE *ST = 0;
 struct Bob bob;
-CHAR16 num_buf[17];
+CHAR16 num_buf[17]; // buffer for printing
 EFI_GUID vga_guid = EFI_GRAPHICS_OUTPUT_PROTOCOL_GUID;
 EFI_GUID acpi_guid = ACPI_20_TABLE_GUID;
 
+/// wait for the user to press a key
 void waitForKey(EFI_SYSTEM_TABLE *ST)
 {
 	EFI_STATUS status;
 	EFI_INPUT_KEY key;
-	/* Clear keyboard buffer */
+	// Clear keyboard buffer
 	status = ST->ConIn->Reset(ST->ConIn, FALSE);
 	if (EFI_ERROR(status))
 		return;
 
-	/* Wait for key press */
+	// Wait for key press
 	while ((status = ST->ConIn->ReadKeyStroke(ST->ConIn, &key)) == EFI_NOT_READY)
 		; // do nothing
 }
 
+/// convert an int (0-15) to it's char equivalent
 unsigned char hexChar(unsigned n)
 {
 	if (n < 10)
@@ -32,6 +34,7 @@ unsigned char hexChar(unsigned n)
 	return n - 10 + 'A';
 }
 
+/// put a byte (0-255) into the num_buf (hex)
 void buf8(unsigned n)
 {
 	num_buf[0] = hexChar((n & 0xf0) >> 4);
@@ -39,11 +42,12 @@ void buf8(unsigned n)
 	num_buf[2] = 0;
 }
 
-void buf32(unsigned n)
+/// put a dword (32 bit) into the num_buf (hex)
+void buf32(UINT32 n)
 {
-	unsigned i = 0;
-	unsigned sft = 28;
-	unsigned mask = 0xf0000000;
+	UINT32 i = 0;
+	UINT32 sft = 28;
+	UINT32 mask = 0xf0000000;
 	for (i = 0; i < 8; ++i)
 	{
 		num_buf[i] = hexChar((n & mask) >> sft);
@@ -53,12 +57,15 @@ void buf32(unsigned n)
 	num_buf[i] = 0;
 }
 
+/// put a qword (32 bit) into the num_buf (hex)
 void buf64(UINT64 n)
 {
-	unsigned i = 0;
-	unsigned sft = 60;
+	UINT32 i = 0;
+	UINT32 sft = 60;
+
 	UINT64 mask = 0xf;
 	mask <<= sft;
+
 	for (i = 0; i < 16; ++i)
 	{
 		num_buf[i] = hexChar((n & mask) >> sft);
@@ -68,9 +75,11 @@ void buf64(UINT64 n)
 	num_buf[i] = 0;
 }
 
-void puts(EFI_SYSTEM_TABLE *ST, const char *str, unsigned ct)
+/// put a simple string on the console
+void puts(EFI_SYSTEM_TABLE *ST, const char *str, UINT32 ct)
 {
-	unsigned i = 0;
+	UINT32 i = 0;
+	// output string uses unicode
 	CHAR16 uni_char[2] = {0, 0};
 
 	while (i < ct && *str)
@@ -153,18 +162,20 @@ void dumpVga(EFI_SYSTEM_TABLE *ST)
 				continue;
 			}
 		}
-		ST->ConOut->OutputString(ST->ConOut, L"Best Mode ");
-		buf32(best_width);
-		ST->ConOut->OutputString(ST->ConOut, num_buf);
-		ST->ConOut->OutputString(ST->ConOut, L" x ");
-		buf32(best_height);
-		ST->ConOut->OutputString(ST->ConOut, num_buf);
-		ST->ConOut->OutputString(ST->ConOut, L"\r\n");
-
-		vga_iface->SetMode(vga_iface, best_mode);
 
 		if (i == 0)
 		{
+			ST->ConOut->OutputString(ST->ConOut, L"Best Mode ");
+			buf32(best_width);
+			ST->ConOut->OutputString(ST->ConOut, num_buf);
+			ST->ConOut->OutputString(ST->ConOut, L" x ");
+			buf32(best_height);
+			ST->ConOut->OutputString(ST->ConOut, num_buf);
+			ST->ConOut->OutputString(ST->ConOut, L"\r\n");
+			waitForKey(ST);
+
+			vga_iface->SetMode(vga_iface, best_mode);
+
 			bob.vga_width = best_width;
 			bob.vga_height = best_height;
 			bob.vga_bpp = 32;
@@ -174,7 +185,7 @@ void dumpVga(EFI_SYSTEM_TABLE *ST)
 	ST->BootServices->FreePool(buffer);
 }
 
-void dumpMem(EFI_HANDLE image_handle, EFI_SYSTEM_TABLE *ST)
+void buildMem(EFI_HANDLE image_handle, EFI_SYSTEM_TABLE *ST)
 {
 	UINTN memory_map_size = 0;
 	EFI_MEMORY_DESCRIPTOR memory_map;
@@ -189,6 +200,7 @@ void dumpMem(EFI_HANDLE image_handle, EFI_SYSTEM_TABLE *ST)
 	unsigned valid = 0;
 	UINT64 *mem_block = 0;
 
+	// pull the memory map
 	status = ST->BootServices->GetMemoryMap(
 	    &memory_map_size,
 	    &memory_map,
@@ -293,11 +305,13 @@ void dumpAcpi(EFI_SYSTEM_TABLE *ST)
 	char *ptr = 0;
 	char *xsdt_entry = 0;
 
+	// walk the System Table
 	for (i = 0; i < ST->NumberOfTableEntries; ++i)
 	{
 		int j = 0;
 		unsigned match = 1;
 
+		// find the ACPI 2.0 table
 		if (ST->ConfigurationTable[i].VendorGuid.Data1 != acpi_guid.Data1)
 			continue;
 
@@ -325,6 +339,7 @@ void dumpAcpi(EFI_SYSTEM_TABLE *ST)
 		return;
 	}
 
+	// XSDT is at offset 24
 	tmp64 = *(UINT64*)(ptr + 24);
 	if (tmp64 == 0)
 	{
@@ -333,19 +348,28 @@ void dumpAcpi(EFI_SYSTEM_TABLE *ST)
 	else
 	{
 		UINT32 num_entries = 0;
+		UINT32 num_lapic = 0;
+		UINT32 num_ioapic = 0;
 
 		// move to XSDT pointer
 		ptr = (char*)tmp64;
 
+		//--- entries are an array at the end
+		// length is at offset 4
 		tmp32 = *(UINT32*)(ptr + 4);
+		// length - 36 (header fields), 8 bytes per pointer
 		num_entries = (tmp32 - 36) / 8; // number of entries
 
+		// foreach XSDT entry
 		for (i = 0; i < num_entries; ++i)
 		{
+			// 8 byte pointer to the entry
 			tmp64 = *(UINT64*)(ptr + 36);
 			xsdt_entry = (char*)tmp64;
+
+			// pull the signature
 			tmp32 = *(UINT32*)xsdt_entry;
-			if (tmp32 != 0x43495041) // APIC
+			if (tmp32 != 0x43495041) // want APIC
 			{
 				ptr += 8;
 				continue;
@@ -355,8 +379,12 @@ void dumpAcpi(EFI_SYSTEM_TABLE *ST)
 				UINT32 xsdt_len = *(UINT32*)(xsdt_entry + 4);
 				UINT32 off = 44; // start of aux tables
 
-				bob.lapic = *(UINT32*)(xsdt_entry + 36);
-				bob.apic_flags = *(UINT32*)(xsdt_entry + 40);
+				if (num_lapic == 0)
+				{
+					bob.lapic = *(UINT32*)(xsdt_entry + 36);
+					bob.apic_flags = *(UINT32*)(xsdt_entry + 40);
+				}
+				++num_lapic;
 
 				while (off < xsdt_len)
 				{
@@ -368,17 +396,13 @@ void dumpAcpi(EFI_SYSTEM_TABLE *ST)
 					}
 					else if (tmp32 == 1) // IOAPIC
 					{
-						// TODO pull IOAPIC info
-						bob.ioapic   = *(UINT32*)(xsdt_entry + off + 4);
-						bob.irq_base = *(UINT32*)(xsdt_entry + off + 8);
-
-						ST->ConOut->OutputString(ST->ConOut, L"IOAPIC Source: ");
-						buf32(bob.ioapic);
-						ST->ConOut->OutputString(ST->ConOut, num_buf);
-						ST->ConOut->OutputString(ST->ConOut, L" ");
-						buf32(bob.irq_base);
-						ST->ConOut->OutputString(ST->ConOut, num_buf);
-						ST->ConOut->OutputString(ST->ConOut, L"\r\n");
+						// pull IOAPIC info
+						if (num_ioapic == 0)
+						{
+							bob.ioapic   = *(UINT32*)(xsdt_entry + off + 4);
+							bob.irq_base = *(UINT32*)(xsdt_entry + off + 8);
+						}
+						++num_ioapic;
 					}
 					else if (tmp32 == 2) // IRQ remapped
 					{
@@ -398,6 +422,7 @@ void dumpAcpi(EFI_SYSTEM_TABLE *ST)
 					}
 					else
 					{
+						ST->ConOut->OutputString(ST->ConOut, L"Unknown aux table: ");
 						buf8(tmp32);
 						ST->ConOut->OutputString(ST->ConOut, num_buf);
 						ST->ConOut->OutputString(ST->ConOut, L"\r\n");
@@ -410,6 +435,16 @@ void dumpAcpi(EFI_SYSTEM_TABLE *ST)
 
 			ptr += 8;
 		}
+
+		ST->ConOut->OutputString(ST->ConOut, L"Num LAPIC: ");
+		buf8(num_lapic);
+		ST->ConOut->OutputString(ST->ConOut, num_buf);
+		ST->ConOut->OutputString(ST->ConOut, L"\r\n");
+
+		ST->ConOut->OutputString(ST->ConOut, L"Num IOAPIC: ");
+		buf8(num_ioapic);
+		ST->ConOut->OutputString(ST->ConOut, num_buf);
+		ST->ConOut->OutputString(ST->ConOut, L"\r\n");
 	}
 
 	waitForKey(ST);
@@ -419,11 +454,16 @@ EFI_STATUS efi_main(EFI_HANDLE image_handle, EFI_SYSTEM_TABLE *system_table)
 {
 	ST = system_table;
 
+	// pull the APIC tables
 	dumpAcpi(ST);
 
+	// choose the best VGA mode, and set it
 	dumpVga(ST);
-	dumpMem(image_handle, ST);
 
+	// pull the memory map and exit boot services
+	buildMem(image_handle, ST);
+
+	// transfer to kernel (does not return)
 	kernel_main();
 
 	return 0;
