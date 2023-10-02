@@ -193,9 +193,9 @@ str_hello:
 disk_address_packet:
 	db 0x10       ; structure size
 	db 0          ; padding
-	dw 0x7f       ; block count
+	dw 0xf        ; block count
 	dd 0x7e00     ; destination
-	dq 0xdeadbeef ; put absolute sector here
+	dq 1          ; put absolute sector here
 
 boot_disk:
 	dw 0

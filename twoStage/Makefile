@@ -1,7 +1,7 @@
 .PHONY: all clean
 ASMFLAGS := -w+orphan-labels
 
-all: os.bin
+all: bochs.img
 
 -include DependAsm.Make
 
