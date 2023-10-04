@@ -11,19 +11,17 @@ PAGE_LEN       equ   0x01000
 	mov ds, ax ; space saver
 	call fun_kzero
 
-	xchg bx,bx ; Bochs magic debug break
-
-	; entry0 - null segment
-	; entry1 - code segment
-	;     [(GDT_BASE & 0xffff)+0x08] base = 0
+	;; entry0 - null segment
+	;; entry1 - code segment
+	;;    [(GDT_BASE & 0xffff)+0x08] base = 0
 	mov   [(GDT_BASE & 0xffff)+0x0c], WORD 0x9800
 	mov   [(GDT_BASE & 0xffff)+0x0e], BYTE 0xf
-	; entry2 - data segment
-	;     [(GDT_BASE & 0xffff)+0x10] base = 0
+	;; entry2 - data segment
+	;;    [(GDT_BASE & 0xffff)+0x10] base = 0
 	mov   [(GDT_BASE & 0xffff)+0x14], WORD 0x9300
 	mov   [(GDT_BASE & 0xffff)+0x16], BYTE 0xf
 
-	; leave space for IDT
+	;; leave space for IDT
 
 	; page tables (PML,PDP,PD at PAGE_BASE)
 	mov ax, (PAGE_BASE >> 4)
@@ -85,6 +83,7 @@ codePE:
 	bts   eax, 31
 	mov   cr0, eax
 
+	; transfer to kernel
 	jmp 8:0x7e00
 
 gdt:

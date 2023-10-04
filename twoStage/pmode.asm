@@ -1,3 +1,4 @@
+; pmode bootstrap
 ; constants
 PAGE_PRESENT   equ   1
 PAGE_WRITE     equ   2
