@@ -5,8 +5,8 @@ bits 64
 
 %include "bob.asm"
 extern bob
-global kernel_main
 
+global kernel_main
 kernel_main:
 	cli
 
@@ -277,7 +277,8 @@ vputc:
 	je .updateCursor
 
 	sub edx, 32
-	mov rdx, [rdx*8 + font6x10.space]
+	lea rbp, [font6x10.space]
+	mov rdx, [rbp + rdx*8]
 
 	call drawChar
 
