@@ -382,7 +382,16 @@ void dumpAcpi(EFI_SYSTEM_TABLE *ST)
 				if (num_lapic == 0)
 				{
 					bob.lapic = *(UINT32*)(xsdt_entry + 36);
+					ST->ConOut->OutputString(ST->ConOut, L"LAPIC Base: ");
+					buf32(bob.lapic);
+					ST->ConOut->OutputString(ST->ConOut, num_buf);
+					ST->ConOut->OutputString(ST->ConOut, L"\r\n");
+
 					bob.apic_flags = *(UINT32*)(xsdt_entry + 40);
+					ST->ConOut->OutputString(ST->ConOut, L"LAPIC Flags: ");
+					buf32(bob.apic_flags);
+					ST->ConOut->OutputString(ST->ConOut, num_buf);
+					ST->ConOut->OutputString(ST->ConOut, L"\r\n");
 				}
 				++num_lapic;
 
@@ -400,7 +409,16 @@ void dumpAcpi(EFI_SYSTEM_TABLE *ST)
 						if (num_ioapic == 0)
 						{
 							bob.ioapic   = *(UINT32*)(xsdt_entry + off + 4);
+							ST->ConOut->OutputString(ST->ConOut, L"IOAPIC Base: ");
+							buf32(bob.ioapic);
+							ST->ConOut->OutputString(ST->ConOut, num_buf);
+							ST->ConOut->OutputString(ST->ConOut, L"\r\n");
+
 							bob.irq_base = *(UINT32*)(xsdt_entry + off + 8);
+							ST->ConOut->OutputString(ST->ConOut, L"IOAPIC IRQ base: ");
+							buf32(bob.irq_base);
+							ST->ConOut->OutputString(ST->ConOut, num_buf);
+							ST->ConOut->OutputString(ST->ConOut, L"\r\n");
 						}
 						++num_ioapic;
 					}

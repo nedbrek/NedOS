@@ -21,3 +21,7 @@ floppy.img: BOOTX64.EFI
 run: floppy.img
 	@qemu-system-x86_64 -bios /usr/share/qemu/OVMF.fd -cdrom floppy.img
 
+.PHONY: clean
+clean:
+	rm -f main.o kernel.obj floppy.img BOOTX64.EFI
+
